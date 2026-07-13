@@ -22,16 +22,54 @@
   };
 
   const levelGoal = (i) => Math.round(MAX_LEVEL_PTS * (0.4 + i * 0.03) / 50) * 50;
+  const MAX_ATTEMPTS = 3;
 
   const fmt = (n) => n.toLocaleString('pt-BR');
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
+  // ---------- desafio diário ----------
+  // A data local vira a "chave do dia": ela reseta o progresso à meia-noite
+  // e semeia o sorteio dos lugares — todo mundo joga o mesmo desafio no dia.
+  const dayKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const challengeNum = () =>
+    Math.floor((new Date(`${dayKey()}T00:00:00`) - new Date('2026-01-01T00:00:00')) / 864e5) + 1;
+
+  const hashStr = (s) => {
+    let h = 1779033703 ^ s.length;
+    for (let i = 0; i < s.length; i++) {
+      h = Math.imul(h ^ s.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    return h >>> 0;
+  };
+  // PRNG determinístico (mulberry32)
+  const mulberry32 = (a) => () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
   // ---------- persistência ----------
   const store = {
-    get unlocked() { return Math.max(1, parseInt(localStorage.getItem('cnm_unlocked') || '1', 10)); },
-    set unlocked(v) { localStorage.setItem('cnm_unlocked', String(v)); },
-    get best() { try { return JSON.parse(localStorage.getItem('cnm_best') || '[]'); } catch { return []; } },
-    set best(v) { localStorage.setItem('cnm_best', JSON.stringify(v)); },
+    // progresso do dia: {day, used, best, bestLevel, passed[]} — descartado quando vira o dia
+    get daily() {
+      try {
+        const d = JSON.parse(localStorage.getItem('cnm_daily') || 'null');
+        if (d && d.day === dayKey()) return d;
+      } catch { /* estado corrompido: recomeça */ }
+      return { day: dayKey(), used: 0, best: 0, bestLevel: 0, passed: [] };
+    },
+    set daily(v) { localStorage.setItem('cnm_daily', JSON.stringify(v)); },
+    // recorde histórico (sobrevive à virada do dia)
+    get record() {
+      try { return JSON.parse(localStorage.getItem('cnm_record') || 'null') || { score: 0, day: '' }; }
+      catch { return { score: 0, day: '' }; }
+    },
+    set record(v) { localStorage.setItem('cnm_record', JSON.stringify(v)); },
     get muted() { return localStorage.getItem('cnm_muted') === '1'; },
     set muted(v) { localStorage.setItem('cnm_muted', v ? '1' : '0'); },
   };
@@ -487,12 +525,18 @@
     timeLeft: 10,
     lastTickSec: null,
     roundStartAt: 0,     // proteção contra toques acidentais logo no início
+    attemptScore: 0,     // total acumulado da tentativa (todos os níveis)
+    attemptNum: 1,       // 1..3
+    attemptCounted: false, // a tentativa só é debitada na 1ª rodada jogada
   };
 
-  const pickPlaces = (level) => {
+  // sorteio determinístico: mesma data + mesmo nível = mesmos 5 lugares,
+  // para qualquer jogador, em qualquer aparelho
+  const pickPlaces = (level, levelIdx) => {
+    const rng = mulberry32(hashStr(`${dayKey()}#${levelIdx}`));
     const pool = [...level.places];
     for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rng() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, ROUNDS_PER_LEVEL);
@@ -511,42 +555,66 @@
     return ['🙈', 'Outro continente!'];
   };
 
-  // ---------- tela inicial ----------
+  // ---------- tela inicial (painel do desafio do dia) ----------
   function renderStart() {
+    const daily = store.daily;
+    const left = MAX_ATTEMPTS - daily.used;
+    const d = new Date();
+    $('daily-num').textContent = `🌍 Desafio #${challengeNum()}`;
+    $('daily-date').textContent = d.toLocaleDateString('pt-BR');
+    $('daily-tries').textContent = '🎯'.repeat(left) + '✖'.repeat(daily.used);
+    $('daily-best').textContent = daily.best ? fmt(daily.best) : '—';
+    $('daily-record').textContent = store.record.score ? fmt(store.record.score) : '—';
+
+    // grade de níveis: mostra até onde você chegou HOJE (só visual)
     const grid = $('level-grid');
     grid.innerHTML = '';
-    const unlocked = store.unlocked;
-    const best = store.best;
     window.LEVELS.forEach((lv, i) => {
-      const tile = document.createElement('button');
+      const tile = document.createElement('div');
       tile.className = 'level-tile';
-      const goal = levelGoal(i);
-      const b = best[i] || 0;
-      if (i + 1 > unlocked) tile.classList.add('locked');
-      if (b >= goal) tile.classList.add('done');
+      const done = !!daily.passed[i];
+      const reached = i <= daily.bestLevel;
+      if (done) tile.classList.add('done');
+      if (!reached && !done) tile.classList.add('locked');
       tile.innerHTML = `
-        <span class="lt-num">${i + 1 > unlocked ? '🔒' : i + 1}</span>
+        <span class="lt-num">${done || reached ? i + 1 : '🔒'}</span>
         <span class="lt-name">${lv.name}</span>
-        <span class="lt-best">${b ? fmt(b) : ''}</span>`;
-      tile.addEventListener('click', () => {
-        if (i + 1 > unlocked) return;
-        sfx.tick();
-        openIntro(i);
-      });
+        <span class="lt-best"></span>`;
       grid.appendChild(tile);
     });
-    const total = best.reduce((a, b) => a + (b || 0), 0);
-    $('best-info').innerHTML = total
-      ? `Sua melhor campanha soma <strong>${fmt(total)} pts</strong> · nível máximo desbloqueado: <strong>${Math.min(unlocked, 8)}</strong>`
-      : 'Primeira vez? Comece pelo nível 1 e desbloqueie o mundo. 🌎';
+
+    const play = $('btn-play');
+    if (left > 0) {
+      play.disabled = false;
+      play.textContent = daily.used === 0 ? '▶ Jogar o desafio de hoje' : `▶ Nova tentativa (resta${left > 1 ? 'm' : ''} ${left})`;
+      $('best-info').innerHTML = daily.used === 0
+        ? 'Todo dia, um desafio novo — o mesmo para todo mundo. Você tem <strong>3 tentativas</strong>, do nível 1 até onde aguentar. 🌎'
+        : `Melhor de hoje: <strong>${fmt(daily.best)} pts</strong>. Cada tentativa recomeça do nível 1 — vale a melhor!`;
+    } else {
+      play.disabled = true;
+      play.textContent = '⏳ Tentativas esgotadas';
+      const mid = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+      const mins = Math.ceil((mid - d) / 60000);
+      $('best-info').innerHTML = `Você fez <strong>${fmt(daily.best)} pts</strong> hoje. Novo desafio em <strong>${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}</strong>. 🌙`;
+    }
     $('btn-mute').textContent = store.muted ? '🔇' : '🔊';
+  }
+
+  // ---------- tentativa (campanha do nível 1 em diante) ----------
+  function startAttempt() {
+    const daily = store.daily;
+    if (daily.used >= MAX_ATTEMPTS) { renderStart(); return; }
+    game.attemptScore = 0;
+    game.attemptCounted = false;
+    game.attemptNum = daily.used + 1;
+    openIntro(0);
   }
 
   // ---------- fluxo de nível ----------
   function openIntro(idx) {
     game.levelIdx = idx;
     const lv = window.LEVELS[idx];
-    $('intro-kicker').textContent = `Nível ${idx + 1} de ${window.LEVELS.length}`;
+    $('intro-kicker').textContent = `Nível ${idx + 1} de ${window.LEVELS.length} · Tentativa ${game.attemptNum}/${MAX_ATTEMPTS}`;
     $('intro-name').textContent = lv.name;
     $('intro-desc').textContent = lv.desc;
     $('intro-time').textContent = `${lv.time}s`;
@@ -555,12 +623,21 @@
   }
 
   function startLevel() {
+    // debita a tentativa na primeira rodada de fato jogada (voltar da
+    // tela de intro não gasta tentativa; recarregar no meio, sim)
+    if (!game.attemptCounted) {
+      const daily = store.daily;
+      if (daily.used >= MAX_ATTEMPTS) { renderStart(); show('start'); return; }
+      daily.used++;
+      store.daily = daily;
+      game.attemptCounted = true;
+    }
     const lv = window.LEVELS[game.levelIdx];
-    game.places = pickPlaces(lv);
+    game.places = pickPlaces(lv, game.levelIdx);
     game.roundIdx = 0;
     game.score = 0;
     game.rounds = [];
-    $('hud-level').textContent = `Nível ${game.levelIdx + 1} · ${lv.name}`;
+    $('hud-level').textContent = `Nível ${game.levelIdx + 1}/8 · ${lv.name}`;
     $('hud-score').textContent = '0';
     show('game');
     startRound();
@@ -687,24 +764,35 @@
     const goal = levelGoal(idx);
     const passed = game.score >= goal;
     const isLast = idx === window.LEVELS.length - 1;
+    game.attemptScore += game.score;
 
-    // persistência
-    const best = store.best;
-    best[idx] = Math.max(best[idx] || 0, game.score);
-    store.best = best;
-    if (passed && idx + 2 > store.unlocked) store.unlocked = Math.min(idx + 2, window.LEVELS.length);
+    // persistência do dia + recorde histórico
+    const daily = store.daily;
+    if (passed) {
+      daily.passed[idx] = true;
+      daily.bestLevel = Math.max(daily.bestLevel, Math.min(idx + 1, window.LEVELS.length - 1));
+    }
+    daily.best = Math.max(daily.best, game.attemptScore);
+    store.daily = daily;
+    if (game.attemptScore > store.record.score) store.record = { score: game.attemptScore, day: dayKey() };
+
+    const left = MAX_ATTEMPTS - daily.used;
+    const attemptOver = !passed || isLast;
 
     $('summary-badge').textContent = passed ? (isLast ? '🏆' : '🎉') : '😿';
     $('summary-title').textContent = passed
-      ? (isLast ? 'Você zerou o jogo!' : `Nível ${idx + 1} concluído!`)
-      : 'Não foi dessa vez...';
+      ? (isLast ? 'Você zerou o desafio de hoje!' : `Nível ${idx + 1} concluído!`)
+      : `Fim da tentativa ${game.attemptNum}...`;
     $('summary-sub').textContent = passed
       ? (isLast
-        ? 'Das ruas de Paris a Funafuti: o mapa-múndi não tem mais segredos para você.'
-        : `Você desbloqueou o nível ${idx + 2}: ${window.LEVELS[idx + 1].name}.`)
-      : `Faltaram ${fmt(goal - game.score)} pts para a meta. Bora tentar de novo!`;
+        ? 'Das ruas de Paris a Funafuti: o mapa de hoje não tem mais segredos.'
+        : `Valendo! Próxima parada: nível ${idx + 2}, ${window.LEVELS[idx + 1].name}.`)
+      : `Faltaram ${fmt(goal - game.score)} pts para a meta do nível ${idx + 1}.` +
+        (left > 0 ? ` Você ainda tem ${left} tentativa${left > 1 ? 's' : ''} hoje.` : ' Amanhã tem desafio novo!');
     $('summary-points').textContent = fmt(game.score);
     $('summary-goal-label').textContent = `Meta do nível: ${fmt(goal)} pts`;
+    $('summary-attempt').textContent = `Total da tentativa: ${fmt(game.attemptScore)} pts` +
+      (attemptOver && game.attemptScore >= daily.best && daily.used > 1 ? ' · melhor de hoje! 🏅' : '');
 
     const fill = $('summary-meter-fill');
     fill.classList.toggle('fail', !passed);
@@ -725,8 +813,14 @@
       list.appendChild(li);
     }
 
+    // campanha: passou (e não é o último) → próximo nível;
+    // falhou ou zerou → nova tentativa, se ainda houver
     $('btn-summary-next').classList.toggle('hidden', !passed || isLast);
-    $('btn-summary-retry').textContent = passed ? 'Jogar de novo' : 'Tentar de novo';
+    const retry = $('btn-summary-retry');
+    retry.classList.toggle('hidden', !attemptOver || left <= 0);
+    retry.textContent = isLast && passed
+      ? `Melhorar pontuação (resta${left > 1 ? 'm' : ''} ${left})`
+      : `Nova tentativa (resta${left > 1 ? 'm' : ''} ${left})`;
     show('summary');
     passed ? sfx.fanfare() : sfx.bad();
   }
@@ -743,11 +837,7 @@
   $('btn-zoom-in').addEventListener('click', () => map.zoomAt(map.w / 2, map.h / 2, 1.6));
   $('btn-zoom-out').addEventListener('click', () => map.zoomAt(map.w / 2, map.h / 2, 1 / 1.6));
 
-  $('btn-play').addEventListener('click', () => {
-    sfx.ensure();
-    // começa no nível mais alto ainda não concluído (ou o último desbloqueado)
-    openIntro(Math.min(store.unlocked, window.LEVELS.length) - 1);
-  });
+  $('btn-play').addEventListener('click', () => { sfx.ensure(); startAttempt(); });
   $('btn-start-level').addEventListener('click', () => { sfx.ensure(); startLevel(); });
   $('btn-intro-back').addEventListener('click', () => { renderStart(); show('start'); });
   $('btn-next').addEventListener('click', nextRound);
@@ -760,7 +850,7 @@
     sfx.tick();
   });
   $('btn-summary-next').addEventListener('click', () => openIntro(game.levelIdx + 1));
-  $('btn-summary-retry').addEventListener('click', () => openIntro(game.levelIdx));
+  $('btn-summary-retry').addEventListener('click', () => { sfx.ensure(); startAttempt(); });
   $('btn-summary-menu').addEventListener('click', () => { renderStart(); show('start'); });
 
   document.addEventListener('keydown', (e) => {

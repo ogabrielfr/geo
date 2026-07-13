@@ -100,6 +100,40 @@ html, body {
 
 .tagline { color: var(--muted); font-size: 1.05rem; line-height: 1.5; }
 
+/* painel do desafio do dia */
+.daily-panel {
+  width: 100%;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.daily-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 900;
+}
+.daily-head #daily-date { color: var(--muted); font-size: 0.85rem; font-weight: 700; }
+.daily-stats { display: flex; gap: 10px; }
+.dstat {
+  flex: 1;
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+.dstat-value { font-size: 1.05rem; font-weight: 900; color: var(--accent); letter-spacing: 1px; }
+.dstat-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+.btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+
 .level-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -114,20 +148,17 @@ html, body {
   border-radius: var(--radius);
   color: var(--text);
   padding: 12px 8px 10px;
-  cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 3px;
   align-items: center;
-  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s;
 }
-.level-tile:hover:not(.locked) { transform: translateY(-3px); border-color: var(--accent); }
 .level-tile .lt-num { font-size: 1.3rem; font-weight: 900; }
 .level-tile .lt-name { font-size: 0.68rem; color: var(--muted); line-height: 1.2; }
 .level-tile .lt-best { font-size: 0.68rem; color: var(--accent); font-weight: 700; min-height: 0.9em; }
 .level-tile.done { border-color: rgba(71, 217, 138, 0.55); }
 .level-tile.done .lt-num::after { content: " ✓"; color: var(--good); font-size: 0.9rem; }
-.level-tile.locked { opacity: 0.45; cursor: not-allowed; filter: saturate(0.4); }
+.level-tile.locked { opacity: 0.45; filter: saturate(0.4); }
 
 .start-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .best-info { color: var(--muted); font-size: 0.9rem; }
@@ -403,6 +434,14 @@ html, body {
   border-radius: 2px;
 }
 .summary-goal-label { font-size: 0.8rem; color: var(--muted); }
+.summary-attempt {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--text);
+  background: var(--bg-2);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
 .summary-rounds {
   list-style: none;
   width: 100%;
