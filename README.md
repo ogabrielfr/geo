@@ -6,8 +6,11 @@ O jogo mostra o nome de um lugar (cidade, capital, ponto turístico ou maravilha
 10 segundos para cravar um alfinete no mapa onde acha que ele fica. A pontuação depende da
 **distância em km** do palpite e da **velocidade** — metade dos pontos vem do relógio.
 
-Funciona em desktop e celular: no computador um clique crava o palpite; no toque, você arrasta o
-alfinete com uma **lupa de ampliação 3×** sob o dedo e aperta **Confirmar** (o tempo continua correndo).
+Funciona em desktop e celular. O mapa tem **pan e zoom**: arraste para explorar, faça pinça
+(ou use a rolagem do mouse) para aproximar — e **um toque/clique parado crava o palpite**.
+No celular o mapa abre grande, preenchendo a tela; o relógio corre enquanto você navega, então
+explorar demais custa bônus. Após o palpite, a câmera enquadra automaticamente o seu alfinete e o
+lugar certo.
 
 ## Como rodar
 
@@ -33,8 +36,7 @@ sozinho a cada push na `main`.
 - Pontuação da rodada: `(500 + 500 × fração_do_tempo_restante) × e^(−distância_km / 1500)`
   — 50% distância, 50% velocidade. Cravar perto mas devagar rende no máximo ~500; perto **e** rápido, até 1.000.
 - Cada nível tem uma **meta mínima** para desbloquear o próximo (de 2.000 pts no nível 1 a 3.050 no nível 8).
-- Tempo esgotado sem palpite = 0 pontos. No toque, se o tempo acabar com o alfinete já posicionado,
-  ele vale como palpite (sem bônus de tempo).
+- Tempo esgotado sem palpite = 0 pontos.
 - Nos níveis 1 e 2 o jogo mostra o país como dica; do nível 3 em diante, só o nome do lugar.
 
 ## Níveis
