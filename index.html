@@ -17,6 +17,18 @@
         <h1 class="logo">📍 Cadê no Mapa<span class="logo-q">?</span></h1>
         <p class="tagline">O nome de um lugar aparece. Crave o alfinete no mapa antes do tempo acabar.<br>Quanto mais perto e mais rápido, mais pontos!</p>
 
+        <div class="daily-panel">
+          <div class="daily-head">
+            <span id="daily-num">🌍 Desafio #1</span>
+            <span id="daily-date"></span>
+          </div>
+          <div class="daily-stats">
+            <div class="dstat"><span id="daily-tries" class="dstat-value">🎯🎯🎯</span><span class="dstat-label">tentativas</span></div>
+            <div class="dstat"><span id="daily-best" class="dstat-value">—</span><span class="dstat-label">melhor de hoje</span></div>
+            <div class="dstat"><span id="daily-record" class="dstat-value">—</span><span class="dstat-label">recorde</span></div>
+          </div>
+        </div>
+
         <div id="level-grid" class="level-grid"></div>
 
         <div class="start-actions">
@@ -38,8 +50,9 @@
           <li>🧭 Arraste para explorar o mapa e use <strong>pinça</strong> (ou a rolagem do mouse) para dar zoom. Arrastar não crava: só o toque parado vale.</li>
           <li>⏱️ Você tem <strong>10 segundos</strong> por rodada — e o relógio corre enquanto você navega: metade dos pontos vem da velocidade.</li>
           <li>🎯 A pontuação (até <strong>1.000 pts</strong> por rodada) combina a distância em km do palpite com o tempo restante.</li>
-          <li>📈 Cada nível tem <strong>5 rodadas</strong> e uma meta mínima de pontos. Bateu a meta, desbloqueia o próximo nível.</li>
-          <li>🌍 São 8 níveis: das cidades famosas até capitais que quase ninguém sabe apontar.</li>
+          <li>📈 Cada nível tem <strong>5 rodadas</strong> e uma meta mínima de pontos. Bateu a meta, avança; falhou, a tentativa acaba.</li>
+          <li>📅 <strong>Todo dia, um desafio novo</strong> — os lugares são sorteados pela data, iguais para todo mundo. Você tem <strong>3 tentativas por dia</strong>, sempre começando do nível 1, e vale a melhor pontuação.</li>
+          <li>🌍 São 8 níveis: das cidades famosas até capitais que quase ninguém sabe apontar. À meia-noite, tudo zera.</li>
         </ul>
         <div class="score-hint">
           <strong>Dica de mestre:</strong> errar por menos de 150 km quase não desconta pontos — mas demorar, sim. Confie no instinto e crave rápido!
@@ -117,6 +130,7 @@
           <div class="summary-total"><span id="summary-points">0</span> pts</div>
           <div class="summary-meter"><div id="summary-meter-fill"></div><div id="summary-meter-goal"></div></div>
           <p id="summary-goal-label" class="summary-goal-label"></p>
+          <p id="summary-attempt" class="summary-attempt"></p>
         </div>
         <ul id="summary-rounds" class="summary-rounds"></ul>
         <div class="summary-actions">

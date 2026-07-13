@@ -1,10 +1,16 @@
 # 📍 Cadê no Mapa?
 
-Jogo de adivinhar lugares no mapa-múndi, inspirado nos clássicos jogos de geografia do Orkut.
+Jogo **diário** de adivinhar lugares no mapa-múndi, inspirado nos clássicos jogos de geografia do Orkut.
 
 O jogo mostra o nome de um lugar (cidade, capital, ponto turístico ou maravilha natural) e você tem
 10 segundos para cravar um alfinete no mapa onde acha que ele fica. A pontuação depende da
 **distância em km** do palpite e da **velocidade** — metade dos pontos vem do relógio.
+
+**Todo dia, um desafio novo.** Os lugares são sorteados usando a data como semente, então o desafio
+do dia é **o mesmo para todo mundo** — dá para competir com os amigos. Você tem **3 tentativas por
+dia**, cada uma começando do nível 1: passou da meta, avança de nível; falhou, a tentativa acaba.
+Vale a melhor pontuação do dia. À meia-noite, tudo zera e nasce um desafio novo (só o recorde
+histórico sobrevive).
 
 Funciona em desktop e celular. O mapa tem **pan e zoom**: arraste para explorar, faça pinça
 (ou use a rolagem do mouse) para aproximar — e **um toque/clique parado crava o palpite**.
@@ -31,11 +37,16 @@ sozinho a cada push na `main`.
 
 ## Regras
 
+- **Desafio diário**: 5 lugares por nível, sorteados de pools de 24 usando a data como semente
+  (determinístico — todo jogador vê os mesmos lugares no mesmo dia).
+- **3 tentativas por dia**, cada uma começando do nível 1. A tentativa é debitada na primeira
+  rodada jogada. Vale a melhor pontuação; à meia-noite local, o progresso do dia zera.
 - **5 rodadas por nível**, até **1.000 pts por rodada** (máximo 5.000 por nível).
 - **10 segundos por rodada em todos os níveis** — a dificuldade cresce pelos lugares, não pelo relógio.
 - Pontuação da rodada: `(500 + 500 × fração_do_tempo_restante) × e^(−distância_km / 1500)`
   — 50% distância, 50% velocidade. Cravar perto mas devagar rende no máximo ~500; perto **e** rápido, até 1.000.
-- Cada nível tem uma **meta mínima** para desbloquear o próximo (de 2.000 pts no nível 1 a 3.050 no nível 8).
+- Cada nível tem uma **meta mínima** para avançar (de 2.000 pts no nível 1 a 3.050 no nível 8);
+  falhar a meta encerra a tentativa.
 - Tempo esgotado sem palpite = 0 pontos.
 - Nos níveis 1 e 2 o jogo mostra o país como dica; do nível 3 em diante, só o nome do lugar.
 
@@ -52,7 +63,7 @@ sozinho a cada push na `main`.
 | 7 | Cantos Remotos | 2.900 | Fim do mundo |
 | 8 | Nível Lenda | 3.050 | Capitais que nem o Google acha de primeira |
 
-Cada nível tem um pool de 12 lugares e sorteia 5 a cada partida — dá para rejogar sem decorar a sequência.
+Cada nível tem um pool de 24 lugares (192 no total) e o desafio do dia sorteia 5 de cada.
 Progresso (níveis desbloqueados e recordes) fica salvo no `localStorage` do navegador.
 
 ## Estrutura
@@ -61,7 +72,7 @@ Progresso (níveis desbloqueados e recordes) fica salvo no `localStorage` do nav
 index.html        — telas do jogo (início, intro do nível, jogo, resumo)
 css/style.css     — visual completo
 js/world-data.js  — mapa-múndi em GeoJSON embutido (Natural Earth 110m, via world-atlas)
-js/places.js      — banco com 96 lugares (coordenadas, categoria, bandeira e curiosidade)
+js/places.js      — banco com 192 lugares (coordenadas, categoria, bandeira e curiosidade)
 js/game.js        — renderização do mapa em canvas, cronômetro, pontuação e fluxo de níveis
 ```
 
