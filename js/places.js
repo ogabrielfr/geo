@@ -25,7 +25,7 @@ window.LEVELS = [
   {
     name: 'Capitais Famosas',
     desc: 'Capitais que aparecem no noticiário. Mais 5 rodadas!',
-    time: 9,
+    time: 10,
     places: [
       { name: 'Washington, D.C.', country: 'Estados Unidos', flag: '🇺🇸', cat: 'capital', lat: 38.91, lng: -77.04, fact: 'Nenhum prédio pode ser mais alto que o Capitólio, por lei.' },
       { name: 'Berlim', country: 'Alemanha', flag: '🇩🇪', cat: 'capital', lat: 52.52, lng: 13.4, fact: 'Tem mais pontes que Veneza: cerca de 1.700.' },
@@ -44,7 +44,7 @@ window.LEVELS = [
   {
     name: 'Cartões-Postais',
     desc: 'Pontos turísticos clássicos. Sem dica de país agora!',
-    time: 8,
+    time: 10,
     places: [
       { name: 'Machu Picchu', country: 'Peru', flag: '🇵🇪', cat: 'turistico', lat: -13.16, lng: -72.55, fact: 'Foi construída no século 15 sem uso de rodas nem argamassa.' },
       { name: 'Cristo Redentor', country: 'Brasil', flag: '🇧🇷', cat: 'turistico', lat: -22.95, lng: -43.21, fact: 'É atingido por raios de 3 a 5 vezes por ano.' },
@@ -63,7 +63,7 @@ window.LEVELS = [
   {
     name: 'Cidades pelo Mundo',
     desc: 'Grandes cidades que não são capitais. Fica esperto!',
-    time: 7,
+    time: 10,
     places: [
       { name: 'Barcelona', country: 'Espanha', flag: '🇪🇸', cat: 'cidade', lat: 41.39, lng: 2.17, fact: 'A basílica da Sagrada Família está em obras desde 1882.' },
       { name: 'São Francisco', country: 'Estados Unidos', flag: '🇺🇸', cat: 'cidade', lat: 37.77, lng: -122.42, fact: 'A ponte Golden Gate é repintada continuamente, o ano inteiro.' },
@@ -82,7 +82,7 @@ window.LEVELS = [
   {
     name: 'Capitais Escondidas',
     desc: 'Capitais que pouca gente sabe apontar no mapa.',
-    time: 7,
+    time: 10,
     places: [
       { name: 'Oslo', country: 'Noruega', flag: '🇳🇴', cat: 'capital', lat: 59.91, lng: 10.75, fact: 'Entrega o Prêmio Nobel da Paz todo ano desde 1901.' },
       { name: 'Helsinque', country: 'Finlândia', flag: '🇫🇮', cat: 'capital', lat: 60.17, lng: 24.94, fact: 'Tem uma igreja escavada dentro de uma rocha gigante.' },
@@ -101,7 +101,7 @@ window.LEVELS = [
   {
     name: 'Maravilhas Naturais',
     desc: 'A natureza não tem endereço. Boa sorte!',
-    time: 6,
+    time: 10,
     places: [
       { name: 'Grand Canyon', country: 'Estados Unidos', flag: '🇺🇸', cat: 'natureza', lat: 36.11, lng: -112.11, fact: 'O rio Colorado levou cerca de 6 milhões de anos esculpindo o cânion.' },
       { name: 'Cataratas do Iguaçu', country: 'Brasil / Argentina', flag: '🇧🇷', cat: 'natureza', lat: -25.69, lng: -54.44, fact: 'São 275 quedas d’água — quase o dobro da largura das cataratas do Niágara.' },
@@ -120,7 +120,7 @@ window.LEVELS = [
   {
     name: 'Cantos Remotos',
     desc: 'Fim do mundo. Só os fortes acertam a menos de 500 km.',
-    time: 6,
+    time: 10,
     places: [
       { name: 'Reykjavík', country: 'Islândia', flag: '🇮🇸', cat: 'capital', lat: 64.15, lng: -21.94, fact: 'É a capital mais ao norte do mundo — aquecida por energia geotérmica.' },
       { name: 'Ushuaia', country: 'Argentina', flag: '🇦🇷', cat: 'cidade', lat: -54.8, lng: -68.3, fact: 'A cidade mais austral do mundo, porta de saída para a Antártida.' },
@@ -138,8 +138,8 @@ window.LEVELS = [
   },
   {
     name: 'Nível Lenda',
-    desc: 'Capitais que nem o Google acha de primeira. 5 segundos. Respira.',
-    time: 5,
+    desc: 'Capitais que nem o Google acha de primeira. Respira e crava rápido.',
+    time: 10,
     places: [
       { name: 'Funafuti', country: 'Tuvalu', flag: '🇹🇻', cat: 'capital', lat: -8.52, lng: 179.2, fact: 'Capital de um dos países menos visitados do mundo: ~2 mil turistas/ano.' },
       { name: 'Thimphu', country: 'Butão', flag: '🇧🇹', cat: 'capital', lat: 27.47, lng: 89.64, fact: 'Uma das duas únicas capitais do mundo sem nenhum semáforo.' },

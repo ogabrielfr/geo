@@ -18,7 +18,7 @@
     natureza: '🏞️ Natureza',
   };
 
-  const levelGoal = (i) => Math.round(MAX_LEVEL_PTS * (0.4 + i * 0.04) / 50) * 50;
+  const levelGoal = (i) => Math.round(MAX_LEVEL_PTS * (0.4 + i * 0.03) / 50) * 50;
 
   const fmt = (n) => n.toLocaleString('pt-BR');
 
@@ -89,6 +89,7 @@
       this.base = document.createElement('canvas'); // cache do mapa base
       this.w = 0; this.h = 0; this.dpr = 1;
       this.overlay = null; // { guess:{x,y}, target:{x,y}, phase, t0 }
+      this.pending = null; // { x, y, loupe } — alfinete em ajuste (toque)
       this._raf = null;
       window.addEventListener('resize', () => this.resize());
     }
@@ -248,6 +249,52 @@
       ctx.restore();
     }
 
+    setPending(pending) {
+      this.pending = pending;
+      this.draw();
+    }
+
+    // lupa de ampliação 3× em volta do alfinete durante o arraste no toque
+    drawLoupe(ctx, px, py) {
+      const zoom = 3;
+      const r = Math.min(Math.max(this.h * 0.32, 40 * this.dpr), 90 * this.dpr);
+      const gap = 14 * this.dpr;
+      // preferência: acima do dedo; sem espaço, vai para o lado oposto à borda
+      let lx = px, ly = py - r - gap;
+      if (ly - r < 0) {
+        ly = Math.min(Math.max(py, r), this.h - r);
+        lx = px + (px < this.w / 2 ? r + gap : -(r + gap));
+      }
+      lx = Math.min(Math.max(lx, r), this.w - r);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(lx, ly, r, 0, Math.PI * 2);
+      ctx.clip();
+      const sw = (2 * r) / zoom;
+      ctx.drawImage(this.base, px - sw / 2, py - sw / 2, sw, sw, lx - r, ly - r, 2 * r, 2 * r);
+      // mira no centro
+      ctx.strokeStyle = 'rgba(255, 77, 94, 0.95)';
+      ctx.lineWidth = 2 * this.dpr;
+      ctx.beginPath();
+      ctx.moveTo(lx - r * 0.35, ly); ctx.lineTo(lx - r * 0.1, ly);
+      ctx.moveTo(lx + r * 0.1, ly); ctx.lineTo(lx + r * 0.35, ly);
+      ctx.moveTo(lx, ly - r * 0.35); ctx.lineTo(lx, ly - r * 0.1);
+      ctx.moveTo(lx, ly + r * 0.1); ctx.lineTo(lx, ly + r * 0.35);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(lx, ly, 2.5 * this.dpr, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff4d5e';
+      ctx.fill();
+      ctx.restore();
+      // aro da lupa
+      ctx.beginPath();
+      ctx.arc(lx, ly, r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 2.5 * this.dpr;
+      ctx.stroke();
+    }
+
     drawTarget(ctx, x, y, t) {
       const s = Math.max(this.h / 260, 3.2);
       ctx.save();
@@ -273,6 +320,10 @@
       const ctx = this.ctx;
       ctx.clearRect(0, 0, this.w, this.h);
       ctx.drawImage(this.base, 0, 0);
+      if (this.pending) {
+        this.drawPin(ctx, this.pending.x, this.pending.y, 1, 1);
+        if (this.pending.loupe) this.drawLoupe(ctx, this.pending.x, this.pending.y);
+      }
       const ov = this.overlay;
       if (!ov) return;
       const t = performance.now() - ov.t0;
@@ -327,6 +378,9 @@
     timeTotal: 10,
     timeLeft: 10,
     lastTickSec: null,
+    roundStartAt: 0,     // proteção contra toques acidentais logo no início
+    pendingGuess: null,  // { lat, lng } — alfinete de toque aguardando confirmação
+    dragging: false,
   };
 
   const pickPlaces = (level) => {
@@ -338,8 +392,10 @@
     return pool.slice(0, ROUNDS_PER_LEVEL);
   };
 
+  // 50% distância + 50% velocidade: cravar perto e devagar rende no máx. ~500;
+  // perto E rápido chega a 1.000
   const computeScore = (distKm, timeFrac) =>
-    Math.round((700 + 300 * timeFrac) * Math.exp(-distKm / 1500));
+    Math.round((500 + 500 * timeFrac) * Math.exp(-distKm / 1500));
 
   const distMessage = (d) => {
     if (d < 150) return ['🎯', 'Na mosca!'];
@@ -418,7 +474,12 @@
     // dica de país só nos 2 primeiros níveis
     $('hud-hint').textContent = game.levelIdx < 2 ? `${place.flag} ${place.country}` : '';
     $('result-card').classList.add('hidden');
+    $('btn-confirm').classList.add('hidden');
     $('map').classList.remove('locked');
+    game.pendingGuess = null;
+    game.dragging = false;
+    game.roundStartAt = performance.now();
+    map.setPending(null);
     map.setOverlay(null);
 
     const start = performance.now();
@@ -457,6 +518,10 @@
     if (game.phase !== 'guessing') return;
     game.phase = 'reveal';
     stopTimer();
+    game.pendingGuess = null;
+    game.dragging = false;
+    map.setPending(null);
+    $('btn-confirm').classList.add('hidden');
     const place = game.places[game.roundIdx];
     const dist = haversineKm(lat, lng, place.lat, place.lng);
     const timeFrac = game.timeLeft / game.timeTotal;
@@ -471,10 +536,17 @@
 
   function onTimeout() {
     if (game.phase !== 'guessing') return;
+    game.timeLeft = 0;
+    // alfinete já posicionado no toque? vale como palpite (sem bônus de tempo)
+    if (game.pendingGuess) {
+      updateTimerUI();
+      onGuess(game.pendingGuess.lat, game.pendingGuess.lng);
+      return;
+    }
     game.phase = 'reveal';
     stopTimer();
-    game.timeLeft = 0;
     updateTimerUI();
+    $('btn-confirm').classList.add('hidden');
     const place = game.places[game.roundIdx];
     map.setOverlay({ target: { lat: place.lat, lng: place.lng } });
     $('map').classList.add('locked');
@@ -566,13 +638,60 @@
   }
 
   // ---------- eventos ----------
-  $('map').addEventListener('pointerdown', (e) => {
-    if (game.phase !== 'guessing') return;
+  const canvasPos = (e) => {
     const rect = map.canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width * map.w;
-    const y = (e.clientY - rect.top) / rect.height * map.h;
+    const x = Math.min(Math.max((e.clientX - rect.left) / rect.width * map.w, 0), map.w);
+    const y = Math.min(Math.max((e.clientY - rect.top) / rect.height * map.h, 0), map.h);
+    return [x, y];
+  };
+
+  const updatePendingFromEvent = (e, loupe) => {
+    const [x, y] = canvasPos(e);
     const [lat, lng] = map.unproject(x, y);
-    onGuess(lat, lng);
+    game.pendingGuess = { lat, lng };
+    map.setPending({ x, y, loupe });
+  };
+
+  $('map').addEventListener('pointerdown', (e) => {
+    if (game.phase !== 'guessing' || !e.isPrimary) return;
+    // ignora toques "fantasma" logo após a rodada começar (ex.: dedo que
+    // ainda estava descendo no botão "Próxima rodada")
+    if (performance.now() - game.roundStartAt < 300) return;
+
+    if (e.pointerType === 'mouse') {
+      // desktop: clique único crava na hora
+      const [x, y] = canvasPos(e);
+      const [lat, lng] = map.unproject(x, y);
+      onGuess(lat, lng);
+      return;
+    }
+    // toque/caneta: solta um alfinete ajustável com lupa; confirma depois
+    e.preventDefault();
+    game.dragging = true;
+    try { map.canvas.setPointerCapture(e.pointerId); } catch { /* ok */ }
+    $('btn-confirm').classList.add('hidden');
+    updatePendingFromEvent(e, true);
+  });
+
+  $('map').addEventListener('pointermove', (e) => {
+    if (game.phase !== 'guessing' || !game.dragging || !e.isPrimary) return;
+    e.preventDefault();
+    updatePendingFromEvent(e, true);
+  });
+
+  const endDrag = (e) => {
+    if (!game.dragging || !e.isPrimary) return;
+    game.dragging = false;
+    if (game.phase !== 'guessing' || !game.pendingGuess) return;
+    updatePendingFromEvent(e, false); // apaga a lupa, mantém o alfinete
+    $('btn-confirm').classList.remove('hidden');
+  };
+  $('map').addEventListener('pointerup', endDrag);
+  $('map').addEventListener('pointercancel', endDrag);
+
+  $('btn-confirm').addEventListener('click', () => {
+    if (game.phase !== 'guessing' || !game.pendingGuess) return;
+    onGuess(game.pendingGuess.lat, game.pendingGuess.lng);
   });
 
   $('btn-play').addEventListener('click', () => {

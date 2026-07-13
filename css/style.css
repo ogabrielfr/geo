@@ -304,9 +304,29 @@ html, body {
   cursor: crosshair;
   max-width: 100%;
   max-height: 100%;
-  touch-action: manipulation;
+  touch-action: none;               /* toque no mapa é do jogo, não da rolagem */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 #map.locked { cursor: default; }
+
+/* botão de confirmação do palpite (fluxo de toque) */
+.btn-confirm {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  font-size: 1.05rem;
+  padding: 14px 32px;
+  animation: pop-in 0.18s ease;
+}
+.btn-confirm:active { transform: translateX(-50%) scale(0.96); }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateX(-50%) scale(0.85); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
 
 /* ---------- cartão de resultado ---------- */
 .result-card {
@@ -398,13 +418,82 @@ html, body {
 .summary-rounds .sr-pts { color: var(--accent); font-weight: 800; white-space: nowrap; }
 .summary-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
-/* ---------- responsivo ---------- */
-@media (max-width: 640px) {
-  .level-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+/* ---------- responsivo (celular) ---------- */
+@media (max-width: 700px) {
+  .level-grid { gap: 6px; }
   .level-tile .lt-name { display: none; }
-  #hud { grid-template-columns: 1fr; gap: 4px; justify-items: center; }
-  .hud-left { order: 2; }
-  .hud-right { order: 3; flex-direction: row; gap: 6px; align-items: baseline; }
   .intro-card, .summary-card { padding: 24px 18px; }
   .intro-stats { flex-wrap: wrap; }
+
+  /* tela do jogo: tudo compacto e o mapa colado no topo, largura total */
+  #screen-game { padding: 8px 0 0; gap: 6px; }
+  #hud {
+    padding: 0 10px;
+    row-gap: 6px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'center center'
+      'left right';
+  }
+  .hud-center { grid-area: center; }
+  .hud-left { grid-area: left; min-width: 0; flex-wrap: wrap; }
+  .hud-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .hud-right {
+    grid-area: right;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .hud-score { font-size: 1.05rem; }
+  .hud-chip { font-size: 0.7rem; padding: 4px 10px; }
+  .place-hint { font-size: 0.75rem; }
+  #timerbar { width: calc(100% - 20px); height: 15px; }
+
+  #map-wrap {
+    max-width: none;
+    align-items: flex-start;   /* mapa no topo, não flutuando no meio */
+  }
+  #map {
+    border-radius: 0;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  /* confirmação com o polegar: botão fixo na base da tela */
+  .btn-confirm {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    transform: none;
+    width: auto;
+  }
+  .btn-confirm:active { transform: scale(0.97); }
+  .btn-confirm { animation: pop-in-mobile 0.18s ease; }
+
+  /* resultado vira gaveta fixa embaixo — não cobre o mapa, que está no topo */
+  .result-card {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto;
+    transform: none;
+    animation: slide-up-mobile 0.3s ease;
+  }
+}
+@keyframes slide-up-mobile {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop-in-mobile {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* celular deitado: aproveita a altura escassa */
+@media (max-height: 480px) {
+  #screen-game { padding: 6px 10px 8px; gap: 4px; }
+  .place-hint { display: none; }
+  .place-name { font-size: 1.1rem; }
+  #timerbar { height: 13px; }
 }

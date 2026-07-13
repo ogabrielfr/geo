@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>📍 Cadê no Mapa?</title>
   <meta name="description" content="Jogo de adivinhar lugares no mapa-múndi, inspirado nos clássicos do Orkut.">
   <link rel="stylesheet" href="css/style.css">
@@ -34,14 +34,15 @@
       <div class="modal-card">
         <h2>Como jogar</h2>
         <ul class="how-list">
-          <li>🗺️ O jogo mostra o nome de um lugar — clique no mapa onde você acha que ele fica.</li>
-          <li>⏱️ Você tem até <strong>10 segundos</strong> por rodada. Nos níveis mais altos, o tempo diminui até 5 s.</li>
-          <li>🎯 A pontuação (até <strong>1.000 pts</strong> por rodada) depende da distância em km do palpite e da velocidade do clique.</li>
+          <li>🗺️ O jogo mostra o nome de um lugar — marque no mapa onde você acha que ele fica.</li>
+          <li>🖱️ No computador, um clique crava o palpite. 📱 No celular, toque e arraste o alfinete (uma lupa amplia o mapa sob o dedo) e aperte <strong>Confirmar</strong>.</li>
+          <li>⏱️ Você tem <strong>10 segundos</strong> por rodada — e o relógio vale ouro: metade dos pontos vem da velocidade.</li>
+          <li>🎯 A pontuação (até <strong>1.000 pts</strong> por rodada) combina a distância em km do palpite com o tempo restante.</li>
           <li>📈 Cada nível tem <strong>5 rodadas</strong> e uma meta mínima de pontos. Bateu a meta, desbloqueia o próximo nível.</li>
           <li>🌍 São 8 níveis: das cidades famosas até capitais que quase ninguém sabe apontar.</li>
         </ul>
         <div class="score-hint">
-          <strong>Dica de mestre:</strong> um palpite a menos de 150 km já rende quase o máximo de pontos de distância. Melhor cravar perto do que cravar rápido!
+          <strong>Dica de mestre:</strong> errar por menos de 150 km quase não desconta pontos — mas demorar, sim. Confie no instinto e crave rápido!
         </div>
         <button id="btn-how-close" class="btn btn-primary">Entendi!</button>
       </div>
@@ -85,6 +86,8 @@
 
       <div id="map-wrap">
         <canvas id="map"></canvas>
+
+        <button id="btn-confirm" class="btn btn-primary btn-confirm hidden">📍 Confirmar palpite</button>
 
         <div id="result-card" class="result-card hidden">
           <div class="result-top">
