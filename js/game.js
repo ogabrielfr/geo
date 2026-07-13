@@ -10,6 +10,9 @@
   const LAT_BOTTOM = -56;
   const LAT_SPAN = LAT_TOP - LAT_BOTTOM;
   const MAP_ASPECT = 360 / LAT_SPAN;
+  // espaço do mapa: coordenadas fixas independentes de zoom/tela
+  const MAP_W = 1000;
+  const MAP_H = MAP_W / MAP_ASPECT;
 
   const CAT_LABEL = {
     capital: '⭐ Capital',
@@ -21,6 +24,7 @@
   const levelGoal = (i) => Math.round(MAX_LEVEL_PTS * (0.4 + i * 0.03) / 50) * 50;
 
   const fmt = (n) => n.toLocaleString('pt-BR');
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
   // ---------- persistência ----------
   const store = {
@@ -80,159 +84,252 @@
     return n1 * (t -= 2.625 / d1) * t + 0.984375;
   };
   const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
-  // ---------- renderizador do mapa ----------
+  /* ---------- renderizador do mapa com pan/zoom ----------
+   * O mapa vive em coordenadas próprias (MAP_W × MAP_H). A "view"
+   * {z, tx, ty} converte para pixels do canvas: tela = mapa·z + t.
+   * Gestos: 1 dedo arrasta (pan), pinça dá zoom, toque parado crava;
+   * no desktop, rolagem do mouse dá zoom e o clique parado crava.
+   */
   class WorldMap {
     constructor(canvas) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
-      this.base = document.createElement('canvas'); // cache do mapa base
-      this.w = 0; this.h = 0; this.dpr = 1;
-      this.overlay = null; // { guess:{x,y}, target:{x,y}, phase, t0 }
-      this.pending = null; // { x, y, loupe } — alfinete em ajuste (toque)
+      this.dpr = 1; this.w = 0; this.h = 0;
+      this.view = { z: 1, tx: 0, ty: 0 };
+      this.zMin = 1; this.zCover = 1; this.zMax = 1;
+      this.coarse = window.matchMedia('(pointer: coarse)').matches;
+      this.overlay = null;   // { guess:{lat,lng}, target:{lat,lng}, t0 }
+      this.anim = null;      // animação da view { from, to, t0, dur }
+      this.onTap = null;     // callback (lat, lng)
+      this.pointers = new Map();
+      this.pinch = null;
       this._raf = null;
+      this.paths = this.buildPaths();
+      this.bindEvents();
       window.addEventListener('resize', () => this.resize());
     }
 
+    // lat/lng → coordenadas do mapa (fixas)
     project(lat, lng) {
-      return [ (lng + 180) / 360 * this.w, (LAT_TOP - lat) / LAT_SPAN * this.h ];
+      return [(lng + 180) / 360 * MAP_W, (LAT_TOP - lat) / LAT_SPAN * MAP_H];
     }
-    unproject(x, y) {
-      return [ LAT_TOP - (y / this.h) * LAT_SPAN, (x / this.w) * 360 - 180 ];
+    toScreen(mx, my) {
+      const v = this.view;
+      return [mx * v.z + v.tx, my * v.z + v.ty];
     }
-
-    resize() {
-      const box = this.canvas.parentElement.getBoundingClientRect();
-      if (box.width < 10 || box.height < 10) return;
-      let cw = box.width, ch = cw / MAP_ASPECT;
-      if (ch > box.height) { ch = box.height; cw = ch * MAP_ASPECT; }
-      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-      this.canvas.style.width = cw + 'px';
-      this.canvas.style.height = ch + 'px';
-      this.w = Math.round(cw * this.dpr);
-      this.h = Math.round(ch * this.dpr);
-      this.canvas.width = this.w;
-      this.canvas.height = this.h;
-      this.renderBase();
-      this.draw();
+    fromScreen(sx, sy) {
+      const v = this.view;
+      return [(sx - v.tx) / v.z, (sy - v.ty) / v.z];
+    }
+    unproject(sx, sy) {
+      const [mx, my] = this.fromScreen(sx, sy);
+      const lng = clamp(mx / MAP_W * 360 - 180, -180, 180);
+      const lat = clamp(LAT_TOP - my / MAP_H * LAT_SPAN, LAT_BOTTOM, LAT_TOP);
+      return [lat, lng];
     }
 
-    renderBase() {
-      const { w, h } = this;
-      this.base.width = w; this.base.height = h;
-      const ctx = this.base.getContext('2d');
-
-      // oceano
-      const sea = ctx.createLinearGradient(0, 0, 0, h);
-      sea.addColorStop(0, '#0c2240');
-      sea.addColorStop(1, '#123156');
-      ctx.fillStyle = sea;
-      ctx.fillRect(0, 0, w, h);
-
-      // graticule (meridianos/paralelos a cada 30°)
-      ctx.strokeStyle = 'rgba(150, 190, 235, 0.07)';
-      ctx.lineWidth = 1;
-      for (let lng = -150; lng <= 150; lng += 30) {
-        const [x] = this.project(0, lng);
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-      }
-      for (let lat = -30; lat <= 60; lat += 30) {
-        const [, y] = this.project(lat, 0);
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      }
-
-      // países
-      ctx.lineWidth = Math.max(0.6, this.dpr * 0.5);
-      ctx.strokeStyle = 'rgba(8, 20, 38, 0.9)';
-
-      // desenha um anel "desembrulhando" longitudes que cruzam o antimeridiano
-      // e repete o traçado deslocado para cobrir a borda oposta do mapa
-      const traceRing = (ring) => {
-        let prevLng = ring[0][0], offset = 0;
+    // pré-constrói um Path2D por país em coordenadas do mapa, com
+    // longitudes "desembrulhadas" no antimeridiano e cópia deslocada
+    // para cobrir a borda oposta
+    buildPaths() {
+      const traceRing = (path, ring) => {
+        let prev = ring[0][0], off = 0;
         const pts = [];
         let minX = Infinity, maxX = -Infinity;
-        for (let j = 0; j < ring.length; j++) {
-          let lng = ring[j][0] + offset;
-          if (lng - prevLng > 180) { lng -= 360; offset -= 360; }
-          else if (lng - prevLng < -180) { lng += 360; offset += 360; }
-          prevLng = lng;
-          const [x, y] = this.project(ring[j][1], lng);
+        for (const [lngRaw, lat] of ring) {
+          let lng = lngRaw + off;
+          if (lng - prev > 180) { lng -= 360; off -= 360; }
+          else if (lng - prev < -180) { lng += 360; off += 360; }
+          prev = lng;
+          const [x, y] = this.project(lat, lng);
           pts.push([x, y]);
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
         }
         const shifts = [0];
-        if (minX < 0) shifts.push(this.w);
-        if (maxX > this.w) shifts.push(-this.w);
-        for (const sh of shifts) {
-          for (let j = 0; j < pts.length; j++) {
-            j === 0 ? ctx.moveTo(pts[j][0] + sh, pts[j][1]) : ctx.lineTo(pts[j][0] + sh, pts[j][1]);
-          }
-          ctx.closePath();
+        if (minX < 0) shifts.push(MAP_W);
+        if (maxX > MAP_W) shifts.push(-MAP_W);
+        for (const s of shifts) {
+          pts.forEach(([x, y], i) => (i ? path.lineTo(x + s, y) : path.moveTo(x + s, y)));
+          path.closePath();
         }
       };
-
-      const feats = window.WORLD_GEOJSON.features;
-      for (let i = 0; i < feats.length; i++) {
-        const f = feats[i];
+      return window.WORLD_GEOJSON.features.map((f) => {
         let hash = 0;
         for (const c of f.properties.name) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
-        const hue = 95 + (hash % 46);            // verdes/oliva variados
-        const light = 30 + (hash % 9);
-        ctx.fillStyle = `hsl(${hue}, 30%, ${light}%)`;
-        ctx.beginPath();
+        const path = new Path2D();
         const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
-        for (const poly of polys) {
-          for (const ring of poly) traceRing(ring);
-        }
-        ctx.fill();
-        ctx.stroke();
-      }
+        for (const poly of polys) for (const ring of poly) traceRing(path, ring);
+        return { path, fill: `hsl(${95 + (hash % 46)}, 30%, ${30 + (hash % 9)}%)` };
+      });
     }
 
-    setOverlay(overlay) {
-      this.overlay = overlay ? { ...overlay, t0: performance.now() } : null;
-      this.animate();
+    resize() {
+      const box = this.canvas.parentElement.getBoundingClientRect();
+      if (box.width < 10 || box.height < 10) return;
+      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      this.w = Math.round(box.width * this.dpr);
+      this.h = Math.round(box.height * this.dpr);
+      this.canvas.width = this.w;
+      this.canvas.height = this.h;
+      this.zMin = Math.min(this.w / MAP_W, this.h / MAP_H);   // mundo inteiro visível
+      this.zCover = Math.max(this.w / MAP_W, this.h / MAP_H); // preenche a tela
+      this.zMax = this.zMin * 20;
+      this.resetView();
     }
 
-    animate() {
-      if (this._raf) cancelAnimationFrame(this._raf);
-      const loop = () => {
-        this.draw();
-        // continua animando enquanto houver alvo pulsando ou pino caindo
-        if (this.overlay) this._raf = requestAnimationFrame(loop);
+    // visão inicial: celular (toque) abre preenchendo a tela; desktop, mundo inteiro
+    resetView() {
+      this.anim = null;
+      const z = this.coarse ? this.zCover : this.zMin;
+      this.view.z = z;
+      this.view.tx = (this.w - MAP_W * z) / 2;
+      this.view.ty = (this.h - MAP_H * z) / 2;
+      this.clampView();
+      this.requestDraw();
+    }
+
+    clampView() {
+      const v = this.view, W = MAP_W * v.z, H = MAP_H * v.z;
+      v.tx = W <= this.w ? (this.w - W) / 2 : clamp(v.tx, this.w - W, 0);
+      v.ty = H <= this.h ? (this.h - H) / 2 : clamp(v.ty, this.h - H, 0);
+    }
+
+    zoomAt(sx, sy, factor) {
+      this.anim = null;
+      const v = this.view;
+      const z = clamp(v.z * factor, this.zMin, this.zMax);
+      const k = z / v.z;
+      v.tx = sx - (sx - v.tx) * k;
+      v.ty = sy - (sy - v.ty) * k;
+      v.z = z;
+      this.clampView();
+      this.requestDraw();
+    }
+
+    panBy(dx, dy) {
+      this.anim = null;
+      this.view.tx += dx;
+      this.view.ty += dy;
+      this.clampView();
+      this.requestDraw();
+    }
+
+    // anima a view para enquadrar um conjunto de pontos {lat,lng}
+    fitTo(points, { bottomPad = 0 } = {}) {
+      const coords = points.map((p) => this.project(p.lat, p.lng));
+      let minX = Math.min(...coords.map((c) => c[0])), maxX = Math.max(...coords.map((c) => c[0]));
+      let minY = Math.min(...coords.map((c) => c[1])), maxY = Math.max(...coords.map((c) => c[1]));
+      // caixa mínima para não dar zoom infinito em pontos próximos
+      const minBox = MAP_W * 0.12;
+      if (maxX - minX < minBox) { const c = (minX + maxX) / 2; minX = c - minBox / 2; maxX = c + minBox / 2; }
+      if (maxY - minY < minBox / MAP_ASPECT) { const c = (minY + maxY) / 2; minY = c - minBox / MAP_ASPECT / 2; maxY = c + minBox / MAP_ASPECT / 2; }
+      const pad = 40 * this.dpr;
+      const availW = this.w - 2 * pad;
+      const availH = this.h - 2 * pad - bottomPad;
+      const z = clamp(Math.min(availW / (maxX - minX), availH / (maxY - minY)), this.zMin, this.zMax);
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+      const to = { z, tx: this.w / 2 - cx * z, ty: (this.h - bottomPad) / 2 - cy * z };
+      // aplica o mesmo clamp do alvo antes de animar
+      const save = { ...this.view };
+      Object.assign(this.view, to); this.clampView(); const clamped = { ...this.view };
+      Object.assign(this.view, save);
+      this.anim = { from: { ...this.view }, to: clamped, t0: performance.now(), dur: 550 };
+      this.requestDraw();
+    }
+
+    // ---------- gestos ----------
+    bindEvents() {
+      const c = this.canvas;
+      const pos = (e) => {
+        const r = c.getBoundingClientRect();
+        return [(e.clientX - r.left) * this.dpr, (e.clientY - r.top) * this.dpr];
       };
-      this._raf = requestAnimationFrame(loop);
+
+      c.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try { c.setPointerCapture(e.pointerId); } catch { /* ok */ }
+        const [x, y] = pos(e);
+        this.pointers.set(e.pointerId, { x, y, sx: x, sy: y, moved: false, pinched: false, t0: performance.now() });
+        if (this.pointers.size === 2) {
+          const [a, b] = [...this.pointers.values()];
+          a.pinched = b.pinched = true;
+          this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+        }
+      });
+
+      c.addEventListener('pointermove', (e) => {
+        const p = this.pointers.get(e.pointerId);
+        if (!p) return;
+        const [x, y] = pos(e);
+        const dx = x - p.x, dy = y - p.y;
+        p.x = x; p.y = y;
+        if (Math.hypot(x - p.sx, y - p.sy) > 8 * this.dpr) p.moved = true;
+        if (this.pointers.size === 1) {
+          if (p.moved) this.panBy(dx, dy);
+        } else if (this.pinch) {
+          const [a, b] = [...this.pointers.values()];
+          const d = Math.hypot(a.x - b.x, a.y - b.y);
+          const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+          this.panBy(cx - this.pinch.cx, cy - this.pinch.cy);
+          if (this.pinch.d > 0) this.zoomAt(cx, cy, d / this.pinch.d);
+          this.pinch = { d, cx, cy };
+        }
+      });
+
+      const up = (e) => {
+        const p = this.pointers.get(e.pointerId);
+        if (!p) return;
+        this.pointers.delete(e.pointerId);
+        if (this.pointers.size < 2) this.pinch = null;
+        // toque/clique parado e curto = palpite
+        if (!p.moved && !p.pinched && performance.now() - p.t0 < 600 && this.onTap) {
+          const [lat, lng] = this.unproject(p.x, p.y);
+          this.onTap(lat, lng);
+        }
+      };
+      c.addEventListener('pointerup', up);
+      c.addEventListener('pointercancel', (e) => { this.pointers.delete(e.pointerId); this.pinch = null; });
+
+      c.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const [x, y] = pos(e);
+        this.zoomAt(x, y, Math.exp(-e.deltaY * 0.0018));
+      }, { passive: false });
     }
 
-    // desenha segmento respeitando a volta do mundo (antimeridiano)
-    wrappedLine(ctx, x1, y1, x2, y2, progress) {
-      let tx = x2;
-      if (tx - x1 > this.w / 2) tx -= this.w;
-      if (tx - x1 < -this.w / 2) tx += this.w;
-      const ex = x1 + (tx - x1) * progress;
-      const ey = y1 + (y2 - y1) * progress;
-      const shift = x2 - tx; // 0 se não cruza a borda
-      for (const off of shift === 0 ? [0] : [0, shift]) {
-        ctx.beginPath();
-        ctx.moveTo(x1 + off, y1);
-        ctx.lineTo(ex + off, ey);
-        ctx.stroke();
-      }
-      return [ex, ey];
+    // ---------- desenho ----------
+    requestDraw() {
+      if (this._raf) return;
+      this._raf = requestAnimationFrame(() => {
+        this._raf = null;
+        this.draw();
+        if (this.overlay || this.anim) this.requestDraw(); // pulso do alvo / animação da view
+      });
     }
 
-    drawPin(ctx, x, y, scale = 1, drop = 1) {
-      const s = Math.max(this.h / 260, 3.2) * scale;
+    stepAnim() {
+      if (!this.anim) return;
+      const a = this.anim;
+      const t = Math.min((performance.now() - a.t0) / a.dur, 1);
+      const k = easeInOut(t);
+      this.view.z = a.from.z + (a.to.z - a.from.z) * k;
+      this.view.tx = a.from.tx + (a.to.tx - a.from.tx) * k;
+      this.view.ty = a.from.ty + (a.to.ty - a.from.ty) * k;
+      if (t >= 1) this.anim = null;
+    }
+
+    drawPin(ctx, x, y, drop = 1) {
+      const s = Math.max(3.6 * this.dpr, 4);
       const rise = (1 - easeOutBounce(Math.min(drop, 1))) * -12 * s;
       const py = y + rise;
       ctx.save();
-      // sombra no chão
       ctx.fillStyle = `rgba(0,0,0,${0.35 * Math.min(drop, 1)})`;
       ctx.beginPath();
       ctx.ellipse(x, y + s * 0.6, s * 1.6, s * 0.7, 0, 0, Math.PI * 2);
       ctx.fill();
-      // haste + cabeça
       ctx.beginPath();
       ctx.moveTo(x, py);
       ctx.quadraticCurveTo(x - s * 2.4, py - s * 3.4, x, py - s * 6.4);
@@ -249,63 +346,15 @@
       ctx.restore();
     }
 
-    setPending(pending) {
-      this.pending = pending;
-      this.draw();
-    }
-
-    // lupa de ampliação 3× em volta do alfinete durante o arraste no toque
-    drawLoupe(ctx, px, py) {
-      const zoom = 3;
-      const r = Math.min(Math.max(this.h * 0.32, 40 * this.dpr), 90 * this.dpr);
-      const gap = 14 * this.dpr;
-      // preferência: acima do dedo; sem espaço, vai para o lado oposto à borda
-      let lx = px, ly = py - r - gap;
-      if (ly - r < 0) {
-        ly = Math.min(Math.max(py, r), this.h - r);
-        lx = px + (px < this.w / 2 ? r + gap : -(r + gap));
-      }
-      lx = Math.min(Math.max(lx, r), this.w - r);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(lx, ly, r, 0, Math.PI * 2);
-      ctx.clip();
-      const sw = (2 * r) / zoom;
-      ctx.drawImage(this.base, px - sw / 2, py - sw / 2, sw, sw, lx - r, ly - r, 2 * r, 2 * r);
-      // mira no centro
-      ctx.strokeStyle = 'rgba(255, 77, 94, 0.95)';
-      ctx.lineWidth = 2 * this.dpr;
-      ctx.beginPath();
-      ctx.moveTo(lx - r * 0.35, ly); ctx.lineTo(lx - r * 0.1, ly);
-      ctx.moveTo(lx + r * 0.1, ly); ctx.lineTo(lx + r * 0.35, ly);
-      ctx.moveTo(lx, ly - r * 0.35); ctx.lineTo(lx, ly - r * 0.1);
-      ctx.moveTo(lx, ly + r * 0.1); ctx.lineTo(lx, ly + r * 0.35);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(lx, ly, 2.5 * this.dpr, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff4d5e';
-      ctx.fill();
-      ctx.restore();
-      // aro da lupa
-      ctx.beginPath();
-      ctx.arc(lx, ly, r, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.lineWidth = 2.5 * this.dpr;
-      ctx.stroke();
-    }
-
     drawTarget(ctx, x, y, t) {
-      const s = Math.max(this.h / 260, 3.2);
+      const s = Math.max(3.6 * this.dpr, 4);
       ctx.save();
-      // pulso expandindo
       const pulse = (t % 1200) / 1200;
       ctx.beginPath();
       ctx.arc(x, y, s * (2 + pulse * 5), 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(255, 194, 71, ${0.55 * (1 - pulse)})`;
       ctx.lineWidth = s * 0.5;
       ctx.stroke();
-      // alvo
       const rings = [[2.6, '#ffffff'], [1.9, '#ff4d5e'], [1.2, '#ffffff'], [0.55, '#ff4d5e']];
       for (const [r, color] of rings) {
         ctx.beginPath();
@@ -316,22 +365,82 @@
       ctx.restore();
     }
 
-    draw() {
-      const ctx = this.ctx;
-      ctx.clearRect(0, 0, this.w, this.h);
-      ctx.drawImage(this.base, 0, 0);
-      if (this.pending) {
-        this.drawPin(ctx, this.pending.x, this.pending.y, 1, 1);
-        if (this.pending.loupe) this.drawLoupe(ctx, this.pending.x, this.pending.y);
+    // linha tracejada respeitando a volta do mundo
+    wrappedLine(ctx, x1, y1, x2, y2, progress) {
+      const wrapW = MAP_W * this.view.z;
+      let tx = x2;
+      if (tx - x1 > wrapW / 2) tx -= wrapW;
+      if (tx - x1 < -wrapW / 2) tx += wrapW;
+      const ex = x1 + (tx - x1) * progress;
+      const ey = y1 + (y2 - y1) * progress;
+      const shift = x2 - tx;
+      for (const off of shift === 0 ? [0] : [0, shift]) {
+        ctx.beginPath();
+        ctx.moveTo(x1 + off, y1);
+        ctx.lineTo(ex + off, ey);
+        ctx.stroke();
       }
+    }
+
+    setOverlay(overlay) {
+      this.overlay = overlay ? { ...overlay, t0: performance.now() } : null;
+      this.requestDraw();
+    }
+
+    draw() {
+      this.stepAnim();
+      const ctx = this.ctx, v = this.view;
+      // fundo fora do mapa: mais escuro, para delimitar a área jogável
+      ctx.fillStyle = '#081527';
+      ctx.fillRect(0, 0, this.w, this.h);
+
+      // oceano (retângulo do mapa na tela)
+      const [x0, y0] = this.toScreen(0, 0);
+      const [x1, y1] = this.toScreen(MAP_W, MAP_H);
+      const sea = ctx.createLinearGradient(0, y0, 0, y1);
+      sea.addColorStop(0, '#0c2240');
+      sea.addColorStop(1, '#123156');
+      ctx.fillStyle = sea;
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+
+      // graticule a cada 30°
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, y0, x1 - x0, y1 - y0);
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(150, 190, 235, 0.07)';
+      ctx.lineWidth = 1;
+      for (let lng = -150; lng <= 150; lng += 30) {
+        const [gx] = this.toScreen(...this.project(0, lng));
+        ctx.beginPath(); ctx.moveTo(gx, y0); ctx.lineTo(gx, y1); ctx.stroke();
+      }
+      for (let lat = -30; lat <= 60; lat += 30) {
+        const [, gy] = this.toScreen(...this.project(lat, 0));
+        ctx.beginPath(); ctx.moveTo(x0, gy); ctx.lineTo(x1, gy); ctx.stroke();
+      }
+      ctx.restore();
+
+      // países (Path2D em coordenadas do mapa, transformados pela view)
+      ctx.save();
+      ctx.translate(v.tx, v.ty);
+      ctx.scale(v.z, v.z);
+      ctx.strokeStyle = 'rgba(8, 20, 38, 0.9)';
+      ctx.lineWidth = Math.max(0.6, this.dpr * 0.5) / v.z;
+      for (const p of this.paths) {
+        ctx.fillStyle = p.fill;
+        ctx.fill(p.path);
+        ctx.stroke(p.path);
+      }
+      ctx.restore();
+
+      // sobreposição: alfinete, alvo e linha (em pixels de tela)
       const ov = this.overlay;
       if (!ov) return;
       const t = performance.now() - ov.t0;
-
       if (ov.guess) {
-        const [gx, gy] = this.project(ov.guess.lat, ov.guess.lng);
+        const [gx, gy] = this.toScreen(...this.project(ov.guess.lat, ov.guess.lng));
         if (ov.target && t > 250) {
-          const [tx, ty] = this.project(ov.target.lat, ov.target.lng);
+          const [tx, ty] = this.toScreen(...this.project(ov.target.lat, ov.target.lng));
           const progress = easeOutCubic(Math.min((t - 250) / 550, 1));
           ctx.save();
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
@@ -341,10 +450,9 @@
           ctx.restore();
           if (progress >= 1) this.drawTarget(ctx, tx, ty, t);
         }
-        this.drawPin(ctx, gx, gy, 1, t / 350);
+        this.drawPin(ctx, gx, gy, t / 350);
       } else if (ov.target) {
-        // tempo esgotado: só revela o alvo
-        const [tx, ty] = this.project(ov.target.lat, ov.target.lng);
+        const [tx, ty] = this.toScreen(...this.project(ov.target.lat, ov.target.lng));
         this.drawTarget(ctx, tx, ty, t);
       }
     }
@@ -379,8 +487,6 @@
     timeLeft: 10,
     lastTickSec: null,
     roundStartAt: 0,     // proteção contra toques acidentais logo no início
-    pendingGuess: null,  // { lat, lng } — alfinete de toque aguardando confirmação
-    dragging: false,
   };
 
   const pickPlaces = (level) => {
@@ -467,6 +573,7 @@
     game.timeTotal = lv.time;
     game.timeLeft = lv.time;
     game.lastTickSec = null;
+    game.roundStartAt = performance.now();
 
     $('hud-round').textContent = `Rodada ${game.roundIdx + 1}/${ROUNDS_PER_LEVEL}`;
     $('hud-cat').textContent = CAT_LABEL[place.cat] || place.cat;
@@ -474,13 +581,8 @@
     // dica de país só nos 2 primeiros níveis
     $('hud-hint').textContent = game.levelIdx < 2 ? `${place.flag} ${place.country}` : '';
     $('result-card').classList.add('hidden');
-    $('btn-confirm').classList.add('hidden');
-    $('map').classList.remove('locked');
-    game.pendingGuess = null;
-    game.dragging = false;
-    game.roundStartAt = performance.now();
-    map.setPending(null);
     map.setOverlay(null);
+    map.resetView();
 
     const start = performance.now();
     const tick = () => {
@@ -514,21 +616,20 @@
     $('timerbar').classList.remove('urgent');
   }
 
+  // enquadra palpite + alvo sem esconder atrás do cartão de resultado
+  const revealPad = () => ({ bottomPad: (map.coarse ? 260 : 120) * map.dpr });
+
   function onGuess(lat, lng) {
     if (game.phase !== 'guessing') return;
     game.phase = 'reveal';
     stopTimer();
-    game.pendingGuess = null;
-    game.dragging = false;
-    map.setPending(null);
-    $('btn-confirm').classList.add('hidden');
     const place = game.places[game.roundIdx];
     const dist = haversineKm(lat, lng, place.lat, place.lng);
     const timeFrac = game.timeLeft / game.timeTotal;
     const pts = computeScore(dist, timeFrac);
 
     map.setOverlay({ guess: { lat, lng }, target: { lat: place.lat, lng: place.lng } });
-    $('map').classList.add('locked');
+    map.fitTo([{ lat, lng }, { lat: place.lat, lng: place.lng }], revealPad());
     sfx.plop();
     setTimeout(() => (dist < 1500 ? sfx.good() : sfx.bad()), 750);
     setTimeout(() => showResult(place, dist, pts), 850);
@@ -536,20 +637,13 @@
 
   function onTimeout() {
     if (game.phase !== 'guessing') return;
-    game.timeLeft = 0;
-    // alfinete já posicionado no toque? vale como palpite (sem bônus de tempo)
-    if (game.pendingGuess) {
-      updateTimerUI();
-      onGuess(game.pendingGuess.lat, game.pendingGuess.lng);
-      return;
-    }
     game.phase = 'reveal';
     stopTimer();
+    game.timeLeft = 0;
     updateTimerUI();
-    $('btn-confirm').classList.add('hidden');
     const place = game.places[game.roundIdx];
     map.setOverlay({ target: { lat: place.lat, lng: place.lng } });
-    $('map').classList.add('locked');
+    map.fitTo([{ lat: place.lat, lng: place.lng }], revealPad());
     sfx.bad();
     showResult(place, null, 0);
   }
@@ -638,61 +732,16 @@
   }
 
   // ---------- eventos ----------
-  const canvasPos = (e) => {
-    const rect = map.canvas.getBoundingClientRect();
-    const x = Math.min(Math.max((e.clientX - rect.left) / rect.width * map.w, 0), map.w);
-    const y = Math.min(Math.max((e.clientY - rect.top) / rect.height * map.h, 0), map.h);
-    return [x, y];
-  };
-
-  const updatePendingFromEvent = (e, loupe) => {
-    const [x, y] = canvasPos(e);
-    const [lat, lng] = map.unproject(x, y);
-    game.pendingGuess = { lat, lng };
-    map.setPending({ x, y, loupe });
-  };
-
-  $('map').addEventListener('pointerdown', (e) => {
-    if (game.phase !== 'guessing' || !e.isPrimary) return;
+  map.onTap = (lat, lng) => {
+    if (game.phase !== 'guessing') return;
     // ignora toques "fantasma" logo após a rodada começar (ex.: dedo que
     // ainda estava descendo no botão "Próxima rodada")
     if (performance.now() - game.roundStartAt < 300) return;
-
-    if (e.pointerType === 'mouse') {
-      // desktop: clique único crava na hora
-      const [x, y] = canvasPos(e);
-      const [lat, lng] = map.unproject(x, y);
-      onGuess(lat, lng);
-      return;
-    }
-    // toque/caneta: solta um alfinete ajustável com lupa; confirma depois
-    e.preventDefault();
-    game.dragging = true;
-    try { map.canvas.setPointerCapture(e.pointerId); } catch { /* ok */ }
-    $('btn-confirm').classList.add('hidden');
-    updatePendingFromEvent(e, true);
-  });
-
-  $('map').addEventListener('pointermove', (e) => {
-    if (game.phase !== 'guessing' || !game.dragging || !e.isPrimary) return;
-    e.preventDefault();
-    updatePendingFromEvent(e, true);
-  });
-
-  const endDrag = (e) => {
-    if (!game.dragging || !e.isPrimary) return;
-    game.dragging = false;
-    if (game.phase !== 'guessing' || !game.pendingGuess) return;
-    updatePendingFromEvent(e, false); // apaga a lupa, mantém o alfinete
-    $('btn-confirm').classList.remove('hidden');
+    onGuess(lat, lng);
   };
-  $('map').addEventListener('pointerup', endDrag);
-  $('map').addEventListener('pointercancel', endDrag);
 
-  $('btn-confirm').addEventListener('click', () => {
-    if (game.phase !== 'guessing' || !game.pendingGuess) return;
-    onGuess(game.pendingGuess.lat, game.pendingGuess.lng);
-  });
+  $('btn-zoom-in').addEventListener('click', () => map.zoomAt(map.w / 2, map.h / 2, 1.6));
+  $('btn-zoom-out').addEventListener('click', () => map.zoomAt(map.w / 2, map.h / 2, 1 / 1.6));
 
   $('btn-play').addEventListener('click', () => {
     sfx.ensure();
@@ -724,4 +773,7 @@
   // ---------- bootstrap ----------
   renderStart();
   map.resize();
+
+  // gancho de depuração/testes
+  window.__CNM = { map, game };
 })();

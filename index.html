@@ -34,9 +34,9 @@
       <div class="modal-card">
         <h2>Como jogar</h2>
         <ul class="how-list">
-          <li>🗺️ O jogo mostra o nome de um lugar — marque no mapa onde você acha que ele fica.</li>
-          <li>🖱️ No computador, um clique crava o palpite. 📱 No celular, toque e arraste o alfinete (uma lupa amplia o mapa sob o dedo) e aperte <strong>Confirmar</strong>.</li>
-          <li>⏱️ Você tem <strong>10 segundos</strong> por rodada — e o relógio vale ouro: metade dos pontos vem da velocidade.</li>
+          <li>🗺️ O jogo mostra o nome de um lugar — <strong>um toque (ou clique) no mapa crava o palpite</strong>.</li>
+          <li>🧭 Arraste para explorar o mapa e use <strong>pinça</strong> (ou a rolagem do mouse) para dar zoom. Arrastar não crava: só o toque parado vale.</li>
+          <li>⏱️ Você tem <strong>10 segundos</strong> por rodada — e o relógio corre enquanto você navega: metade dos pontos vem da velocidade.</li>
           <li>🎯 A pontuação (até <strong>1.000 pts</strong> por rodada) combina a distância em km do palpite com o tempo restante.</li>
           <li>📈 Cada nível tem <strong>5 rodadas</strong> e uma meta mínima de pontos. Bateu a meta, desbloqueia o próximo nível.</li>
           <li>🌍 São 8 níveis: das cidades famosas até capitais que quase ninguém sabe apontar.</li>
@@ -87,7 +87,10 @@
       <div id="map-wrap">
         <canvas id="map"></canvas>
 
-        <button id="btn-confirm" class="btn btn-primary btn-confirm hidden">📍 Confirmar palpite</button>
+        <div class="zoom-ctrls">
+          <button id="btn-zoom-in" class="zoom-btn" title="Aproximar">+</button>
+          <button id="btn-zoom-out" class="zoom-btn" title="Afastar">−</button>
+        </div>
 
         <div id="result-card" class="result-card hidden">
           <div class="result-top">
