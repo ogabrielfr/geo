@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>📍 Cadê no Mapa?</title>
+  <meta name="description" content="Jogo de adivinhar lugares no mapa-múndi, inspirado nos clássicos do Orkut.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ============ TELA INICIAL ============ -->
+    <section id="screen-start" class="screen active">
+      <div class="start-inner">
+        <h1 class="logo">📍 Cadê no Mapa<span class="logo-q">?</span></h1>
+        <p class="tagline">O nome de um lugar aparece. Crave o alfinete no mapa antes do tempo acabar.<br>Quanto mais perto e mais rápido, mais pontos!</p>
+
+        <div id="level-grid" class="level-grid"></div>
+
+        <div class="start-actions">
+          <button id="btn-play" class="btn btn-primary">▶ Jogar</button>
+          <button id="btn-how" class="btn btn-ghost">Como jogar</button>
+          <button id="btn-mute" class="btn btn-ghost btn-icon" title="Som ligado/desligado">🔊</button>
+        </div>
+
+        <p id="best-info" class="best-info"></p>
+      </div>
+    </section>
+
+    <!-- ============ COMO JOGAR ============ -->
+    <div id="modal-how" class="modal hidden">
+      <div class="modal-card">
+        <h2>Como jogar</h2>
+        <ul class="how-list">
+          <li>🗺️ O jogo mostra o nome de um lugar — marque no mapa onde você acha que ele fica.</li>
+          <li>🖱️ No computador, um clique crava o palpite. 📱 No celular, toque e arraste o alfinete (uma lupa amplia o mapa sob o dedo) e aperte <strong>Confirmar</strong>.</li>
+          <li>⏱️ Você tem <strong>10 segundos</strong> por rodada — e o relógio vale ouro: metade dos pontos vem da velocidade.</li>
+          <li>🎯 A pontuação (até <strong>1.000 pts</strong> por rodada) combina a distância em km do palpite com o tempo restante.</li>
+          <li>📈 Cada nível tem <strong>5 rodadas</strong> e uma meta mínima de pontos. Bateu a meta, desbloqueia o próximo nível.</li>
+          <li>🌍 São 8 níveis: das cidades famosas até capitais que quase ninguém sabe apontar.</li>
+        </ul>
+        <div class="score-hint">
+          <strong>Dica de mestre:</strong> errar por menos de 150 km quase não desconta pontos — mas demorar, sim. Confie no instinto e crave rápido!
+        </div>
+        <button id="btn-how-close" class="btn btn-primary">Entendi!</button>
+      </div>
+    </div>
+
+    <!-- ============ INTRO DO NÍVEL ============ -->
+    <section id="screen-intro" class="screen">
+      <div class="intro-card">
+        <p class="intro-kicker" id="intro-kicker">Nível 1 de 8</p>
+        <h2 id="intro-name">Gigantes do Mapa</h2>
+        <p id="intro-desc" class="intro-desc"></p>
+        <div class="intro-stats">
+          <div class="stat"><span class="stat-value" id="intro-time">10s</span><span class="stat-label">por rodada</span></div>
+          <div class="stat"><span class="stat-value">5</span><span class="stat-label">rodadas</span></div>
+          <div class="stat"><span class="stat-value" id="intro-goal">2.000</span><span class="stat-label">meta de pontos</span></div>
+        </div>
+        <button id="btn-start-level" class="btn btn-primary">Valendo!</button>
+        <button id="btn-intro-back" class="btn btn-ghost">← Menu</button>
+      </div>
+    </section>
+
+    <!-- ============ JOGO ============ -->
+    <section id="screen-game" class="screen">
+      <header id="hud">
+        <div class="hud-left">
+          <span id="hud-level" class="hud-chip">Nível 1</span>
+          <span id="hud-round" class="hud-chip">Rodada 1/5</span>
+        </div>
+        <div class="hud-center">
+          <span id="hud-cat" class="cat-chip">⭐ Capital</span>
+          <span id="hud-place" class="place-name">Paris</span>
+          <span id="hud-hint" class="place-hint"></span>
+        </div>
+        <div class="hud-right">
+          <span class="hud-score-label">PONTOS</span>
+          <span id="hud-score" class="hud-score">0</span>
+        </div>
+      </header>
+
+      <div id="timerbar"><div id="timerfill"></div><span id="timertext">10,0</span></div>
+
+      <div id="map-wrap">
+        <canvas id="map"></canvas>
+
+        <button id="btn-confirm" class="btn btn-primary btn-confirm hidden">📍 Confirmar palpite</button>
+
+        <div id="result-card" class="result-card hidden">
+          <div class="result-top">
+            <span id="result-emoji" class="result-emoji">🎯</span>
+            <div class="result-main">
+              <span id="result-msg" class="result-msg">Na mosca!</span>
+              <span id="result-dist" class="result-dist">a 87 km de distância</span>
+            </div>
+            <span id="result-pts" class="result-pts">+912</span>
+          </div>
+          <p id="result-fact" class="result-fact"></p>
+          <button id="btn-next" class="btn btn-primary btn-block">Próxima rodada →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RESUMO DO NÍVEL ============ -->
+    <section id="screen-summary" class="screen">
+      <div class="summary-card">
+        <div id="summary-badge" class="summary-badge">🎉</div>
+        <h2 id="summary-title">Nível concluído!</h2>
+        <p id="summary-sub" class="summary-sub"></p>
+        <div class="summary-score">
+          <div class="summary-total"><span id="summary-points">0</span> pts</div>
+          <div class="summary-meter"><div id="summary-meter-fill"></div><div id="summary-meter-goal"></div></div>
+          <p id="summary-goal-label" class="summary-goal-label"></p>
+        </div>
+        <ul id="summary-rounds" class="summary-rounds"></ul>
+        <div class="summary-actions">
+          <button id="btn-summary-next" class="btn btn-primary">Próximo nível →</button>
+          <button id="btn-summary-retry" class="btn btn-secondary">Jogar de novo</button>
+          <button id="btn-summary-menu" class="btn btn-ghost">← Menu</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="js/world-data.js"></script>
+  <script src="js/places.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

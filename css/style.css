@@ -1,0 +1,499 @@
+/* ============ Cadê no Mapa? — estilos ============ */
+:root {
+  --bg: #0a1626;
+  --bg-2: #0f2038;
+  --card: #14273f;
+  --card-2: #1a3050;
+  --line: #27436a;
+  --text: #eaf2fb;
+  --muted: #8fa8c7;
+  --accent: #ffc247;
+  --accent-2: #ff9838;
+  --good: #47d98a;
+  --bad: #ff6b6b;
+  --pin: #ff4d5e;
+  --radius: 16px;
+  --font: "Nunito", "Segoe UI", ui-rounded, "Arial Rounded MT Bold", system-ui, -apple-system, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  font-family: var(--font);
+  background: radial-gradient(120% 120% at 50% -10%, #16304f 0%, var(--bg) 60%);
+  color: var(--text);
+  overflow: hidden;
+}
+
+#app { height: 100%; display: flex; flex-direction: column; }
+
+/* ---------- telas ---------- */
+.screen {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.screen.active { display: flex; }
+
+.hidden { display: none !important; }
+
+/* ---------- botões ---------- */
+.btn {
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 28px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.btn:active { transform: scale(0.96); }
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
+  color: #3c2500;
+  box-shadow: 0 4px 0 #b96e14, 0 8px 24px rgba(255, 170, 60, 0.25);
+}
+.btn-primary:hover { box-shadow: 0 4px 0 #b96e14, 0 8px 32px rgba(255, 170, 60, 0.45); }
+
+.btn-secondary {
+  background: var(--card-2);
+  color: var(--text);
+  border: 2px solid var(--line);
+}
+.btn-secondary:hover { background: #22406a; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 2px solid transparent;
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--line); }
+
+.btn-icon { padding: 12px 16px; font-size: 1.15rem; }
+.btn-block { width: 100%; }
+
+/* ---------- tela inicial ---------- */
+.start-inner {
+  max-width: 640px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  align-items: center;
+}
+
+.logo {
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  font-weight: 900;
+  letter-spacing: -1px;
+  text-shadow: 0 4px 24px rgba(255, 194, 71, 0.25);
+}
+.logo-q { color: var(--accent); }
+
+.tagline { color: var(--muted); font-size: 1.05rem; line-height: 1.5; }
+
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.level-tile {
+  font-family: inherit;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 12px 8px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s;
+}
+.level-tile:hover:not(.locked) { transform: translateY(-3px); border-color: var(--accent); }
+.level-tile .lt-num { font-size: 1.3rem; font-weight: 900; }
+.level-tile .lt-name { font-size: 0.68rem; color: var(--muted); line-height: 1.2; }
+.level-tile .lt-best { font-size: 0.68rem; color: var(--accent); font-weight: 700; min-height: 0.9em; }
+.level-tile.done { border-color: rgba(71, 217, 138, 0.55); }
+.level-tile.done .lt-num::after { content: " ✓"; color: var(--good); font-size: 0.9rem; }
+.level-tile.locked { opacity: 0.45; cursor: not-allowed; filter: saturate(0.4); }
+
+.start-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.best-info { color: var(--muted); font-size: 0.9rem; }
+.best-info strong { color: var(--accent); }
+
+/* ---------- modal como jogar ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 10, 20, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+.modal-card {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 20px;
+  padding: 28px;
+  max-width: 520px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.how-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.how-list li { line-height: 1.45; color: var(--text); }
+.score-hint {
+  background: rgba(255, 194, 71, 0.1);
+  border: 1px solid rgba(255, 194, 71, 0.35);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: #ffe1a6;
+}
+
+/* ---------- intro do nível ---------- */
+.intro-card, .summary-card {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 24px;
+  padding: 36px 32px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+}
+.intro-kicker {
+  color: var(--accent);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 0.8rem;
+}
+.intro-card h2, .summary-card h2 { font-size: 1.8rem; font-weight: 900; }
+.intro-desc { color: var(--muted); line-height: 1.45; }
+
+.intro-stats { display: flex; gap: 12px; width: 100%; justify-content: center; }
+.stat {
+  background: var(--bg-2);
+  border-radius: 14px;
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 90px;
+}
+.stat-value { font-size: 1.35rem; font-weight: 900; color: var(--accent); }
+.stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ---------- HUD do jogo ---------- */
+#screen-game { padding: 10px 14px 14px; gap: 8px; justify-content: flex-start; }
+
+#hud {
+  width: 100%;
+  max-width: 1100px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.hud-left { display: flex; gap: 8px; }
+.hud-chip {
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+.hud-center { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.cat-chip {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+}
+.place-name {
+  font-size: clamp(1.15rem, 3.4vw, 1.7rem);
+  font-weight: 900;
+  text-align: center;
+  line-height: 1.1;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+.place-hint { font-size: 0.8rem; color: var(--muted); min-height: 1em; }
+.hud-right { display: flex; flex-direction: column; align-items: flex-end; }
+.hud-score-label { font-size: 0.62rem; letter-spacing: 2px; color: var(--muted); font-weight: 800; }
+.hud-score { font-size: 1.4rem; font-weight: 900; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* ---------- barra de tempo ---------- */
+#timerbar {
+  width: 100%;
+  max-width: 1100px;
+  height: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+#timerfill {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--good);
+  transition: background 0.3s linear;
+}
+#timertext {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+#timerbar.urgent { animation: pulse-bar 0.5s infinite alternate; }
+@keyframes pulse-bar {
+  from { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.0); }
+  to { box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.35); }
+}
+
+/* ---------- mapa ---------- */
+#map-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#map {
+  border-radius: 18px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), inset 0 0 0 2px var(--line);
+  cursor: crosshair;
+  max-width: 100%;
+  max-height: 100%;
+  touch-action: none;               /* toque no mapa é do jogo, não da rolagem */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#map.locked { cursor: default; }
+
+/* botão de confirmação do palpite (fluxo de toque) */
+.btn-confirm {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  font-size: 1.05rem;
+  padding: 14px 32px;
+  animation: pop-in 0.18s ease;
+}
+.btn-confirm:active { transform: translateX(-50%) scale(0.96); }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateX(-50%) scale(0.85); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+/* ---------- cartão de resultado ---------- */
+.result-card {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: min(480px, calc(100% - 28px));
+  background: rgba(16, 30, 52, 0.94);
+  backdrop-filter: blur(8px);
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: slide-up 0.3s ease;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateX(-50%) translateY(24px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.result-top { display: flex; align-items: center; gap: 12px; }
+.result-emoji { font-size: 2rem; }
+.result-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.result-msg { font-weight: 900; font-size: 1.1rem; }
+.result-dist { color: var(--muted); font-size: 0.85rem; }
+.result-pts { font-size: 1.5rem; font-weight: 900; color: var(--accent); font-variant-numeric: tabular-nums; }
+.result-fact {
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.45;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 3px solid var(--accent);
+  padding: 8px 12px;
+  border-radius: 0 10px 10px 0;
+}
+
+/* ---------- resumo do nível ---------- */
+.summary-badge { font-size: 3rem; line-height: 1; }
+.summary-sub { color: var(--muted); }
+.summary-score { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.summary-total { font-size: 2.2rem; font-weight: 900; color: var(--accent); }
+.summary-meter {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  overflow: visible;
+}
+#summary-meter-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--good), #7ce6ac);
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#summary-meter-fill.fail { background: linear-gradient(90deg, #e05555, var(--bad)); }
+#summary-meter-goal {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.summary-goal-label { font-size: 0.8rem; color: var(--muted); }
+.summary-rounds {
+  list-style: none;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.86rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.summary-rounds li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-2);
+  border-radius: 10px;
+  padding: 7px 12px;
+}
+.summary-rounds .sr-place { font-weight: 700; text-align: left; }
+.summary-rounds .sr-dist { color: var(--muted); white-space: nowrap; }
+.summary-rounds .sr-pts { color: var(--accent); font-weight: 800; white-space: nowrap; }
+.summary-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* ---------- responsivo (celular) ---------- */
+@media (max-width: 700px) {
+  .level-grid { gap: 6px; }
+  .level-tile .lt-name { display: none; }
+  .intro-card, .summary-card { padding: 24px 18px; }
+  .intro-stats { flex-wrap: wrap; }
+
+  /* tela do jogo: tudo compacto e o mapa colado no topo, largura total */
+  #screen-game { padding: 8px 0 0; gap: 6px; }
+  #hud {
+    padding: 0 10px;
+    row-gap: 6px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'center center'
+      'left right';
+  }
+  .hud-center { grid-area: center; }
+  .hud-left { grid-area: left; min-width: 0; flex-wrap: wrap; }
+  .hud-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .hud-right {
+    grid-area: right;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .hud-score { font-size: 1.05rem; }
+  .hud-chip { font-size: 0.7rem; padding: 4px 10px; }
+  .place-hint { font-size: 0.75rem; }
+  #timerbar { width: calc(100% - 20px); height: 15px; }
+
+  #map-wrap {
+    max-width: none;
+    align-items: flex-start;   /* mapa no topo, não flutuando no meio */
+  }
+  #map {
+    border-radius: 0;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  /* confirmação com o polegar: botão fixo na base da tela */
+  .btn-confirm {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    transform: none;
+    width: auto;
+  }
+  .btn-confirm:active { transform: scale(0.97); }
+  .btn-confirm { animation: pop-in-mobile 0.18s ease; }
+
+  /* resultado vira gaveta fixa embaixo — não cobre o mapa, que está no topo */
+  .result-card {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto;
+    transform: none;
+    animation: slide-up-mobile 0.3s ease;
+  }
+}
+@keyframes slide-up-mobile {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop-in-mobile {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* celular deitado: aproveita a altura escassa */
+@media (max-height: 480px) {
+  #screen-game { padding: 6px 10px 8px; gap: 4px; }
+  .place-hint { display: none; }
+  .place-name { font-size: 1.1rem; }
+  #timerbar { height: 13px; }
+}
