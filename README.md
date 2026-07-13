@@ -18,7 +18,13 @@ Abra o arquivo index.html no navegador. Pronto.
 ```
 
 Se preferir servir localmente: `python3 -m http.server` na raiz do projeto e acesse `http://localhost:8000`.
-O jogo também funciona direto no GitHub Pages (basta apontar o Pages para a raiz do repositório).
+
+### Publicar no GitHub Pages
+
+Por ser um site estático servido da raiz, a publicação usa o modo **Deploy from a branch** (sem workflow):
+em **Settings → Pages → Build and deployment**, escolha **Source: Deploy from a branch** e
+**Branch: `main` / `/ (root)`**. O GitHub publica em `https://<usuário>.github.io/geo/` e reconstrói
+sozinho a cada push na `main`.
 
 ## Regras
 
