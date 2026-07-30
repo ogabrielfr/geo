@@ -164,6 +164,12 @@ html, body {
 
 .start-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .best-info { color: var(--muted); font-size: 0.9rem; }
+.version-tag {
+  color: var(--muted);
+  opacity: 0.5;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+}
 .best-info strong { color: var(--accent); }
 
 /* ---------- modal como jogar ---------- */

@@ -2,6 +2,16 @@
 (() => {
   'use strict';
 
+  // ---------- versões ----------
+  // GAME_VERSION: sobe a cada publicação. Aparece na tela inicial, para dar
+  //   para conferir num relance se o navegador está mesmo com a versão nova.
+  //   Precisa casar com o ?v= das tags <script>/<link> do index.html.
+  // RULES_VERSION: sobe só quando a MECÂNICA muda (metas, piso, pontuação).
+  //   Progresso do dia salvo com uma versão antiga é descartado, para ninguém
+  //   ficar preso a um estado que já não corresponde às regras em vigor.
+  const GAME_VERSION = '7';
+  const RULES_VERSION = 3;
+
   // ---------- constantes ----------
   const ROUNDS_PER_LEVEL = 5;
   const MAX_ROUND_PTS = 1000;
@@ -112,9 +122,10 @@
     get daily() {
       try {
         const d = JSON.parse(localStorage.getItem('cnm_daily') || 'null');
-        if (d && d.day === dayKey()) return d;
+        // vale só se for de hoje E das regras atuais
+        if (d && d.day === dayKey() && d.rules === RULES_VERSION) return d;
       } catch { /* estado corrompido: recomeça */ }
-      return { day: dayKey(), used: 0, best: 0, bestLevel: 0, passed: [] };
+      return { day: dayKey(), rules: RULES_VERSION, used: 0, best: 0, bestLevel: 0, passed: [] };
     },
     set daily(v) { localStorage.setItem('cnm_daily', JSON.stringify(v)); },
     // recorde histórico (sobrevive à virada do dia)
@@ -961,6 +972,13 @@
   });
 
   // ---------- bootstrap ----------
+  // ?reset devolve as 3 tentativas de hoje (útil para testar mudanças no
+  // mesmo dia). Some da URL em seguida, para não zerar de novo ao recarregar.
+  if (new URLSearchParams(location.search).has('reset')) {
+    localStorage.removeItem('cnm_daily');
+    try { history.replaceState(null, '', location.pathname); } catch { /* file:// */ }
+  }
+  $('game-version').textContent = GAME_VERSION;
   renderStart();
   map.resize();
 
