@@ -21,7 +21,14 @@
     natureza: '🏞️ Natureza',
   };
 
-  const levelGoal = (i) => Math.round(MAX_LEVEL_PTS * (0.4 + i * 0.03) / 50) * 50;
+  // Metas CUMULATIVAS: o total da tentativa (somando todos os níveis já
+  // jogados) precisa alcançar esta marca ao fim de cada nível. Mandar bem
+  // cedo cria uma "gordura" que banca os erros dos níveis difíceis.
+  // Calibrado por simulação: um jogador casual para no nível 1-2, um
+  // mediano chega ao 5 e só quem crava perto e rápido o tempo todo zera.
+  const CUM_GOALS = [2100, 4300, 6700, 9200, 11700, 14200, 16600, 18900];
+  const levelGoal = (i) => CUM_GOALS[i];
+  const levelQuota = (i) => CUM_GOALS[i] - (i ? CUM_GOALS[i - 1] : 0);
   const MAX_ATTEMPTS = 3;
 
   const fmt = (n) => n.toLocaleString('pt-BR');
@@ -614,11 +621,31 @@
   function openIntro(idx) {
     game.levelIdx = idx;
     const lv = window.LEVELS[idx];
+    const goal = levelGoal(idx);
+    const banked = game.attemptScore;
+    const need = Math.max(0, goal - banked);
     $('intro-kicker').textContent = `Nível ${idx + 1} de ${window.LEVELS.length} · Tentativa ${game.attemptNum}/${MAX_ATTEMPTS}`;
     $('intro-name').textContent = lv.name;
     $('intro-desc').textContent = lv.desc;
-    $('intro-time').textContent = `${lv.time}s`;
-    $('intro-goal').textContent = fmt(levelGoal(idx));
+    $('intro-banked').textContent = fmt(banked);
+    $('intro-goal').textContent = fmt(goal);
+    $('intro-need').textContent = fmt(need);
+    // a gordura acumulada é o coração da mecânica: mostra em destaque
+    const slack = banked - (idx ? CUM_GOALS[idx - 1] : 0);
+    const note = $('intro-note');
+    if (idx === 0) {
+      note.textContent = 'Os pontos são cumulativos: o que sobrar aqui vira gordura para os níveis difíceis.';
+      note.className = 'intro-note';
+    } else if (need === 0) {
+      note.textContent = `🔥 Sua gordura já cobre este nível inteiro! Cada ponto agora é lucro.`;
+      note.className = 'intro-note good';
+    } else if (slack > 0) {
+      note.textContent = `💰 Você chegou com ${fmt(slack)} pts de gordura — precisa de só ${fmt(need)} aqui (a cota cheia seria ${fmt(levelQuota(idx))}).`;
+      note.className = 'intro-note good';
+    } else {
+      note.textContent = `⚠️ Sem folga: você precisa de ${fmt(need)} pts neste nível para continuar.`;
+      note.className = 'intro-note warn';
+    }
     show('intro');
   }
 
@@ -638,7 +665,8 @@
     game.score = 0;
     game.rounds = [];
     $('hud-level').textContent = `Nível ${game.levelIdx + 1}/8 · ${lv.name}`;
-    $('hud-score').textContent = '0';
+    $('hud-score').textContent = fmt(game.attemptScore);   // placar é o total da tentativa
+    $('hud-goal').textContent = `meta ${fmt(levelGoal(game.levelIdx))}`;
     show('game');
     startRound();
   }
@@ -738,13 +766,16 @@
     $('btn-next').textContent = game.roundIdx + 1 >= ROUNDS_PER_LEVEL ? 'Ver resultado do nível →' : 'Próxima rodada →';
     $('result-card').classList.remove('hidden');
 
-    // contagem animada dos pontos
-    const startScore = game.score;
+    // contagem animada do total acumulado da tentativa
+    const startTotal = game.attemptScore + game.score;
     game.score += pts;
+    const goal = levelGoal(game.levelIdx);
     const t0 = performance.now();
     const count = () => {
       const t = Math.min((performance.now() - t0) / 600, 1);
-      $('hud-score').textContent = fmt(Math.round(startScore + pts * easeOutCubic(t)));
+      const shown = Math.round(startTotal + pts * easeOutCubic(t));
+      $('hud-score').textContent = fmt(shown);
+      $('hud-score').classList.toggle('ahead', shown >= goal);
       if (t < 1) requestAnimationFrame(count);
     };
     requestAnimationFrame(count);
@@ -762,9 +793,11 @@
     map.setOverlay(null);
     const idx = game.levelIdx;
     const goal = levelGoal(idx);
-    const passed = game.score >= goal;
-    const isLast = idx === window.LEVELS.length - 1;
     game.attemptScore += game.score;
+    // avança pelo TOTAL acumulado, não pela pontuação isolada do nível
+    const passed = game.attemptScore >= goal;
+    const slack = game.attemptScore - goal;
+    const isLast = idx === window.LEVELS.length - 1;
 
     // persistência do dia + recorde histórico
     const daily = store.daily;
@@ -787,19 +820,27 @@
       ? (isLast
         ? 'Das ruas de Paris a Funafuti: o mapa de hoje não tem mais segredos.'
         : `Valendo! Próxima parada: nível ${idx + 2}, ${window.LEVELS[idx + 1].name}.`)
-      : `Faltaram ${fmt(goal - game.score)} pts para a meta do nível ${idx + 1}.` +
+      : `Seu total ficou ${fmt(goal - game.attemptScore)} pts abaixo da meta acumulada.` +
         (left > 0 ? ` Você ainda tem ${left} tentativa${left > 1 ? 's' : ''} hoje.` : ' Amanhã tem desafio novo!');
-    $('summary-points').textContent = fmt(game.score);
-    $('summary-goal-label').textContent = `Meta do nível: ${fmt(goal)} pts`;
-    $('summary-attempt').textContent = `Total da tentativa: ${fmt(game.attemptScore)} pts` +
-      (attemptOver && game.attemptScore >= daily.best && daily.used > 1 ? ' · melhor de hoje! 🏅' : '');
+    // o placar do resumo é o TOTAL acumulado — é ele que decide a passagem
+    $('summary-points').textContent = fmt(game.attemptScore);
+    $('summary-goal-label').textContent =
+      `Neste nível: ${fmt(game.score)} pts · meta acumulada até aqui: ${fmt(goal)} pts`;
+    $('summary-attempt').textContent = passed
+      ? (isLast
+        ? `Total final: ${fmt(game.attemptScore)} pts`
+        : `💰 Gordura para o próximo nível: ${fmt(slack)} pts`)
+      : `Total da tentativa: ${fmt(game.attemptScore)} pts`;
+    $('summary-attempt').className = 'summary-attempt' + (passed && !isLast && slack > 0 ? ' good' : '');
 
+    // barra sempre relativa à meta acumulada do nível (com folga de 30% à direita)
+    const scale = goal * 1.3;
     const fill = $('summary-meter-fill');
     fill.classList.toggle('fail', !passed);
     fill.style.width = '0';
-    $('summary-meter-goal').style.left = `${(goal / MAX_LEVEL_PTS) * 100}%`;
+    $('summary-meter-goal').style.left = `${(goal / scale) * 100}%`;
     requestAnimationFrame(() =>
-      requestAnimationFrame(() => { fill.style.width = `${Math.min(game.score / MAX_LEVEL_PTS, 1) * 100}%`; })
+      requestAnimationFrame(() => { fill.style.width = `${Math.min(game.attemptScore / scale, 1) * 100}%`; })
     );
 
     const list = $('summary-rounds');
