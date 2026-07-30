@@ -50,7 +50,8 @@
           <li>🧭 Arraste para explorar o mapa e use <strong>pinça</strong> (ou a rolagem do mouse) para dar zoom. Arrastar não crava: só o toque parado vale.</li>
           <li>⏱️ Você tem <strong>10 segundos</strong> por rodada — e o relógio corre enquanto você navega: metade dos pontos vem da velocidade.</li>
           <li>🎯 A pontuação (até <strong>1.000 pts</strong> por rodada) combina a distância em km do palpite com o tempo restante.</li>
-          <li>📈 Cada nível tem <strong>5 rodadas</strong> e uma meta mínima de pontos. Bateu a meta, avança; falhou, a tentativa acaba.</li>
+          <li>📈 Cada nível tem <strong>5 rodadas</strong>. Os pontos são <strong>cumulativos</strong>: ao fim de cada nível, seu <em>total</em> precisa alcançar a meta acumulada. Bateu, avança; falhou, a tentativa acaba.</li>
+          <li>💰 Ir bem cedo cria <strong>gordura</strong>: sobrar 2.000 pts nos níveis fáceis banca os erros lá na frente, onde pontuar é bem mais difícil.</li>
           <li>📅 <strong>Todo dia, um desafio novo</strong> — os lugares são sorteados pela data, iguais para todo mundo. Você tem <strong>3 tentativas por dia</strong>, sempre começando do nível 1, e vale a melhor pontuação.</li>
           <li>🌍 São 8 níveis: das cidades famosas até capitais que quase ninguém sabe apontar. À meia-noite, tudo zera.</li>
         </ul>
@@ -68,10 +69,11 @@
         <h2 id="intro-name">Gigantes do Mapa</h2>
         <p id="intro-desc" class="intro-desc"></p>
         <div class="intro-stats">
-          <div class="stat"><span class="stat-value" id="intro-time">10s</span><span class="stat-label">por rodada</span></div>
-          <div class="stat"><span class="stat-value">5</span><span class="stat-label">rodadas</span></div>
-          <div class="stat"><span class="stat-value" id="intro-goal">2.000</span><span class="stat-label">meta de pontos</span></div>
+          <div class="stat"><span class="stat-value" id="intro-banked">0</span><span class="stat-label">você tem</span></div>
+          <div class="stat"><span class="stat-value" id="intro-goal">2.000</span><span class="stat-label">meta acumulada</span></div>
+          <div class="stat"><span class="stat-value" id="intro-need">2.000</span><span class="stat-label">falta fazer</span></div>
         </div>
+        <p id="intro-note" class="intro-note"></p>
         <button id="btn-start-level" class="btn btn-primary">Valendo!</button>
         <button id="btn-intro-back" class="btn btn-ghost">← Menu</button>
       </div>
@@ -90,7 +92,7 @@
           <span id="hud-hint" class="place-hint"></span>
         </div>
         <div class="hud-right">
-          <span class="hud-score-label">PONTOS</span>
+          <span id="hud-goal" class="hud-score-label">meta 2.000</span>
           <span id="hud-score" class="hud-score">0</span>
         </div>
       </header>
