@@ -48,25 +48,29 @@ sozinho a cada push na `main`.
 - **Pontuação cumulativa**: ao fim de cada nível, o *total da tentativa* precisa alcançar a meta
   acumulada daquele nível. O que sobra vira **gordura** — mandar bem nos níveis fáceis banca os
   erros lá na frente, onde os lugares são obscuros e pontuar é bem mais difícil.
-- Ficar abaixo da meta acumulada encerra a tentativa.
+- **A gordura não passa nível sozinha**: cada nível também tem um **piso próprio** (40% da sua cota,
+  de 850 a 1.000 pts) que precisa ser feito ali, naquele nível. A gordura dá margem para errar,
+  não passe livre.
+- Falhar no piso do nível ou na meta acumulada encerra a tentativa.
 - Tempo esgotado sem palpite = 0 pontos.
 - Nos níveis 1 e 2 o jogo mostra o país como dica; do nível 3 em diante, só o nome do lugar.
 
 ## Níveis
 
-A coluna **meta** é o total acumulado exigido ao fim do nível; a **cota** é quanto aquele nível
-precisa somar se você chegar sem nenhuma gordura.
+A **meta** é o total acumulado exigido ao fim do nível; a **cota** é quanto aquele nível precisa
+somar se você chegar sem nenhuma gordura; o **piso** é o mínimo que precisa ser feito naquele nível
+mesmo com gordura de sobra.
 
-| # | Nível | Meta acumulada | Cota do nível | Tema |
-|---|-------|---------------|---------------|------|
-| 1 | Gigantes do Mapa | 2.100 | 2.100 | Cidades que todo mundo já viu em filme |
-| 2 | Capitais Famosas | 4.300 | 2.200 | Capitais do noticiário |
-| 3 | Cartões-Postais | 6.700 | 2.400 | Monumentos icônicos |
-| 4 | Cidades pelo Mundo | 9.200 | 2.500 | Grandes cidades que não são capitais |
-| 5 | Capitais Escondidas | 11.700 | 2.500 | Capitais que pouca gente sabe apontar |
-| 6 | Maravilhas Naturais | 14.200 | 2.500 | A natureza não tem endereço |
-| 7 | Cantos Remotos | 16.600 | 2.400 | Ilhas perdidas e fim do mundo |
-| 8 | Nível Lenda | 18.900 | 2.300 | Capitais que nem o Google acha de primeira |
+| # | Nível | Meta acumulada | Cota do nível | Piso | Tema |
+|---|-------|---------------|---------------|------|------|
+| 1 | Gigantes do Mapa | 2.100 | 2.100 | 850 | Cidades que todo mundo já viu em filme |
+| 2 | Capitais Famosas | 4.300 | 2.200 | 900 | Capitais do noticiário |
+| 3 | Cartões-Postais | 6.700 | 2.400 | 950 | Monumentos icônicos |
+| 4 | Cidades pelo Mundo | 9.200 | 2.500 | 1.000 | Grandes cidades que não são capitais |
+| 5 | Capitais Escondidas | 11.700 | 2.500 | 1.000 | Capitais que pouca gente sabe apontar |
+| 6 | Maravilhas Naturais | 14.200 | 2.500 | 1.000 | A natureza não tem endereço |
+| 7 | Cantos Remotos | 16.600 | 2.400 | 950 | Ilhas perdidas e fim do mundo |
+| 8 | Nível Lenda | 18.900 | 2.300 | 900 | Capitais que nem o Google acha de primeira |
 
 As cotas sobem enquanto pontuar é fácil e caem no fim, quando os lugares ficam obscuros. A curva foi
 calibrada por simulação: um jogador casual para no nível 1-2, um mediano chega ao 5, e só quem crava
@@ -88,6 +92,11 @@ js/game.js        — renderização do mapa em canvas, cronômetro, pontuação
 O mapa usa projeção equiretangular recortada (84° N a 56° S), desenhada em canvas a partir do
 GeoJSON — sem tiles, sem dependências externas. Os efeitos sonoros são gerados por WebAudio,
 sem arquivos de áudio.
+
+**Bandeiras**: o Windows não inclui as bandeiras na fonte de emoji, então elas apareceriam como
+letras soltas. O jogo testa em canvas se o sistema desenha a bandeira colorida e, quando não
+desenha, troca o emoji por um chip com a sigla do país (derivada do próprio emoji). Dá para forçar
+cada modo com `?flags=off` e `?flags=on` na URL.
 
 ## Créditos
 

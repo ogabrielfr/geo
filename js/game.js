@@ -29,10 +29,56 @@
   const CUM_GOALS = [2100, 4300, 6700, 9200, 11700, 14200, 16600, 18900];
   const levelGoal = (i) => CUM_GOALS[i];
   const levelQuota = (i) => CUM_GOALS[i] - (i ? CUM_GOALS[i - 1] : 0);
+  // Piso do nível: 40% da cota, arredondado a 50. A gordura NUNCA cobre este
+  // mínimo — ela dá margem para errar, não passe livre. Sempre é preciso jogar.
+  const levelMin = (i) => Math.round((levelQuota(i) * 0.4) / 50) * 50;
+  // o que o nível realmente exige: o piso, ou o que falta para a meta acumulada
+  const levelDemand = (i, banked) => Math.max(levelMin(i), CUM_GOALS[i] - banked);
   const MAX_ATTEMPTS = 3;
 
   const fmt = (n) => n.toLocaleString('pt-BR');
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* ---------- bandeiras ----------
+   * O Windows não traz bandeiras na fonte de emoji (Segoe UI Emoji não tem os
+   * pares de indicadores regionais), então 🇧🇷 sai como "BR" cru ou tofu. Testa
+   * de verdade se o navegador desenha a bandeira colorida; se não, troca por um
+   * chip com a sigla do país — derivada do próprio emoji, sem tocar no banco.
+   */
+  const flagSupported = (() => {
+    // ?flags=off / ?flags=on força o modo, para depurar em qualquer máquina
+    const forced = new URLSearchParams(location.search).get('flags');
+    if (forced === 'off') return false;
+    if (forced === 'on') return true;
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 24;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.textBaseline = 'top';
+      ctx.font = '20px sans-serif';
+      ctx.fillText('\u{1F1E7}\u{1F1F7}', 0, 0);   // 🇧🇷: verde e amarelo se houver suporte
+      const d = ctx.getImageData(0, 0, 24, 24).data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] > 40 && (Math.abs(d[i] - d[i + 1]) > 25 || Math.abs(d[i + 1] - d[i + 2]) > 25)) return true;
+      }
+      return false;   // desenhou monocromático (letras "BR") ou nada
+    } catch { return false; }
+  })();
+
+  // 🇧🇷 -> "BR" (cada indicador regional é U+1F1E6 + posição da letra)
+  const flagCode = (flag) => [...flag]
+    .map((ch) => {
+      const cp = ch.codePointAt(0);
+      return cp >= 0x1f1e6 && cp <= 0x1f1ff ? String.fromCharCode(cp - 0x1f1e6 + 65) : '';
+    })
+    .join('');
+
+  const flagHTML = (flag) => {
+    if (flagSupported) return esc(flag);
+    const code = flagCode(flag);
+    return code ? `<span class="flag-code">${code}</span>` : '';
+  };
 
   // ---------- desafio diário ----------
   // A data local vira a "chave do dia": ela reseta o progresso à meia-noite
@@ -623,27 +669,28 @@
     const lv = window.LEVELS[idx];
     const goal = levelGoal(idx);
     const banked = game.attemptScore;
-    const need = Math.max(0, goal - banked);
+    const min = levelMin(idx);
+    const demand = levelDemand(idx, banked);   // o que este nível exige de verdade
     $('intro-kicker').textContent = `Nível ${idx + 1} de ${window.LEVELS.length} · Tentativa ${game.attemptNum}/${MAX_ATTEMPTS}`;
     $('intro-name').textContent = lv.name;
     $('intro-desc').textContent = lv.desc;
     $('intro-banked').textContent = fmt(banked);
     $('intro-goal').textContent = fmt(goal);
-    $('intro-need').textContent = fmt(need);
+    $('intro-need').textContent = fmt(demand);
     // a gordura acumulada é o coração da mecânica: mostra em destaque
     const slack = banked - (idx ? CUM_GOALS[idx - 1] : 0);
     const note = $('intro-note');
     if (idx === 0) {
-      note.textContent = 'Os pontos são cumulativos: o que sobrar aqui vira gordura para os níveis difíceis.';
+      note.textContent = `Os pontos são cumulativos: o que passar de ${fmt(goal)} aqui vira gordura para os níveis difíceis.`;
       note.className = 'intro-note';
-    } else if (need === 0) {
-      note.textContent = `🔥 Sua gordura já cobre este nível inteiro! Cada ponto agora é lucro.`;
+    } else if (demand === min && slack > 0) {
+      note.textContent = `💰 Sua gordura de ${fmt(slack)} pts cobre a meta — mas todo nível tem um piso: faça ao menos ${fmt(min)} pts aqui.`;
       note.className = 'intro-note good';
     } else if (slack > 0) {
-      note.textContent = `💰 Você chegou com ${fmt(slack)} pts de gordura — precisa de só ${fmt(need)} aqui (a cota cheia seria ${fmt(levelQuota(idx))}).`;
+      note.textContent = `💰 Você chegou com ${fmt(slack)} pts de gordura — precisa de ${fmt(demand)} aqui, e não da cota cheia de ${fmt(levelQuota(idx))}.`;
       note.className = 'intro-note good';
     } else {
-      note.textContent = `⚠️ Sem folga: você precisa de ${fmt(need)} pts neste nível para continuar.`;
+      note.textContent = `⚠️ Sem folga: você precisa de ${fmt(demand)} pts neste nível para continuar.`;
       note.className = 'intro-note warn';
     }
     show('intro');
@@ -667,6 +714,8 @@
     $('hud-level').textContent = `Nível ${game.levelIdx + 1}/8 · ${lv.name}`;
     $('hud-score').textContent = fmt(game.attemptScore);   // placar é o total da tentativa
     $('hud-goal').textContent = `meta ${fmt(levelGoal(game.levelIdx))}`;
+    $('hud-min').textContent = `nível 0/${fmt(levelMin(game.levelIdx))}`;
+    $('hud-min').classList.remove('ok');
     show('game');
     startRound();
   }
@@ -684,7 +733,7 @@
     $('hud-cat').textContent = CAT_LABEL[place.cat] || place.cat;
     $('hud-place').textContent = place.name;
     // dica de país só nos 2 primeiros níveis
-    $('hud-hint').textContent = game.levelIdx < 2 ? `${place.flag} ${place.country}` : '';
+    $('hud-hint').innerHTML = game.levelIdx < 2 ? `${flagHTML(place.flag)} ${esc(place.country)}` : '';
     $('result-card').classList.add('hidden');
     map.setOverlay(null);
     map.resetView();
@@ -762,7 +811,7 @@
       ? 'Você não cravou o alfinete a tempo.'
       : `Seu palpite ficou a ${fmt(Math.round(dist))} km de ${place.name}.`;
     $('result-pts').textContent = `+${fmt(pts)}`;
-    $('result-fact').textContent = `${place.flag} ${place.country} · ${place.fact}`;
+    $('result-fact').innerHTML = `${flagHTML(place.flag)} ${esc(place.country)} · ${esc(place.fact)}`;
     $('btn-next').textContent = game.roundIdx + 1 >= ROUNDS_PER_LEVEL ? 'Ver resultado do nível →' : 'Próxima rodada →';
     $('result-card').classList.remove('hidden');
 
@@ -770,6 +819,9 @@
     const startTotal = game.attemptScore + game.score;
     game.score += pts;
     const goal = levelGoal(game.levelIdx);
+    const min = levelMin(game.levelIdx);
+    $('hud-min').textContent = `nível ${fmt(game.score)}/${fmt(min)}`;
+    $('hud-min').classList.toggle('ok', game.score >= min);
     const t0 = performance.now();
     const count = () => {
       const t = Math.min((performance.now() - t0) / 600, 1);
@@ -793,9 +845,14 @@
     map.setOverlay(null);
     const idx = game.levelIdx;
     const goal = levelGoal(idx);
+    const min = levelMin(idx);
+    const banked = game.attemptScore;          // antes deste nível
     game.attemptScore += game.score;
-    // avança pelo TOTAL acumulado, não pela pontuação isolada do nível
-    const passed = game.attemptScore >= goal;
+    // Dois critérios: o piso do nível (sempre é preciso jogar e pontuar) e a
+    // meta acumulada (onde a gordura entra). Falhar em qualquer um encerra.
+    const metMin = game.score >= min;
+    const metGoal = game.attemptScore >= goal;
+    const passed = metMin && metGoal;
     const slack = game.attemptScore - goal;
     const isLast = idx === window.LEVELS.length - 1;
 
@@ -820,12 +877,14 @@
       ? (isLast
         ? 'Das ruas de Paris a Funafuti: o mapa de hoje não tem mais segredos.'
         : `Valendo! Próxima parada: nível ${idx + 2}, ${window.LEVELS[idx + 1].name}.`)
-      : `Seu total ficou ${fmt(goal - game.attemptScore)} pts abaixo da meta acumulada.` +
+      : (!metMin
+        ? `Você fez ${fmt(game.score)} pts neste nível e o mínimo para seguir é ${fmt(min)} — gordura não cobre o piso.`
+        : `Seu total ficou ${fmt(goal - game.attemptScore)} pts abaixo da meta acumulada.`) +
         (left > 0 ? ` Você ainda tem ${left} tentativa${left > 1 ? 's' : ''} hoje.` : ' Amanhã tem desafio novo!');
     // o placar do resumo é o TOTAL acumulado — é ele que decide a passagem
     $('summary-points').textContent = fmt(game.attemptScore);
     $('summary-goal-label').textContent =
-      `Neste nível: ${fmt(game.score)} pts · meta acumulada até aqui: ${fmt(goal)} pts`;
+      `Neste nível: ${fmt(game.score)}/${fmt(min)} pts (mínimo) · meta acumulada: ${fmt(goal)} pts`;
     $('summary-attempt').textContent = passed
       ? (isLast
         ? `Total final: ${fmt(game.attemptScore)} pts`
@@ -848,7 +907,7 @@
     for (const r of game.rounds) {
       const li = document.createElement('li');
       li.innerHTML = `
-        <span class="sr-place">${r.place.flag} ${r.place.name}</span>
+        <span class="sr-place">${flagHTML(r.place.flag)} ${esc(r.place.name)}</span>
         <span class="sr-dist">${r.dist === null ? '⏰ tempo' : fmt(Math.round(r.dist)) + ' km'}</span>
         <span class="sr-pts">${fmt(r.pts)}</span>`;
       list.appendChild(li);
@@ -906,5 +965,5 @@
   map.resize();
 
   // gancho de depuração/testes
-  window.__CNM = { map, game };
+  window.__CNM = { map, game, flagSupported, flagCode, levelMin, levelDemand, CUM_GOALS };
 })();

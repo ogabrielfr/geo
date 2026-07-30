@@ -13,7 +13,9 @@
   --bad: #ff6b6b;
   --pin: #ff4d5e;
   --radius: 16px;
-  --font: "Nunito", "Segoe UI", ui-rounded, "Arial Rounded MT Bold", system-ui, -apple-system, sans-serif;
+  /* a cauda de fontes de emoji garante os ícones em Windows, macOS e Linux */
+  --font: "Nunito", "Segoe UI", ui-rounded, "Arial Rounded MT Bold", system-ui, -apple-system, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", "Segoe UI Symbol";
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -470,6 +472,23 @@ html, body {
 
 /* placar fica verde quando o total já cobre a meta do nível */
 .hud-score.ahead { color: var(--good); }
+/* chip do piso do nível: verde assim que o mínimo é atingido */
+.hud-chip.ok { color: var(--good); border-color: rgba(71, 217, 138, 0.5); }
+
+/* sigla do país, usada quando o sistema não desenha bandeiras (Windows) */
+.flag-code {
+  display: inline-block;
+  font-size: 0.74em;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  line-height: 1.35;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: var(--text);
+  vertical-align: 1px;
+}
 .summary-rounds {
   list-style: none;
   width: 100%;
