@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>📍 Cadê no Mapa?</title>
   <meta name="description" content="Jogo de adivinhar lugares no mapa-múndi, inspirado nos clássicos do Orkut.">
-  <link rel="stylesheet" href="css/style.css">
+  <!-- ?v= força o navegador a baixar a versão nova em vez de usar o cache;
+       o número sobe a cada publicação (veja GAME_VERSION em js/game.js) -->
+  <link rel="stylesheet" href="css/style.css?v=7">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
 </head>
 <body>
@@ -38,6 +40,7 @@
         </div>
 
         <p id="best-info" class="best-info"></p>
+        <p class="version-tag">versão <span id="game-version">7</span></p>
       </div>
     </section>
 
@@ -147,8 +150,8 @@
 
   </div>
 
-  <script src="js/world-data.js"></script>
-  <script src="js/places.js"></script>
-  <script src="js/game.js"></script>
+  <script src="js/world-data.js?v=7"></script>
+  <script src="js/places.js?v=7"></script>
+  <script src="js/game.js?v=7"></script>
 </body>
 </html>

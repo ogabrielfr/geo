@@ -33,7 +33,27 @@ Se preferir servir localmente: `python3 -m http.server` na raiz do projeto e ace
 Por ser um site estático servido da raiz, a publicação usa o modo **Deploy from a branch** (sem workflow):
 em **Settings → Pages → Build and deployment**, escolha **Source: Deploy from a branch** e
 **Branch: `main` / `/ (root)`**. O GitHub publica em `https://<usuário>.github.io/geo/` e reconstrói
-sozinho a cada push na `main`.
+sozinho a cada push na `main` (leva de 1 a 2 minutos).
+
+### Versões e cache
+
+O navegador guarda os arquivos em cache e pode continuar servindo a versão antiga depois de uma
+publicação. Por isso os assets são referenciados com `?v=N` no `index.html`, e a tela inicial mostra
+a versão no rodapé — dá para conferir num relance se você está vendo a build nova.
+
+Ao publicar uma mudança, atualize em conjunto:
+
+| Onde | O quê | Quando subir |
+|------|-------|--------------|
+| `index.html` | `?v=N` nas tags `<script>` e `<link>` | toda publicação |
+| `js/game.js` | `GAME_VERSION` (deve casar com o `?v=`) | toda publicação |
+| `js/game.js` | `RULES_VERSION` | só quando a mecânica muda (metas, piso, pontuação) |
+
+Subir a `RULES_VERSION` descarta o progresso do dia salvo com as regras antigas, para ninguém ficar
+preso em um estado que não corresponde mais às regras em vigor.
+
+**Testando no mesmo dia**: como são 3 tentativas por dia, abra `...?reset=1` para devolver as
+tentativas de hoje sem esperar a virada do dia.
 
 ## Regras
 
